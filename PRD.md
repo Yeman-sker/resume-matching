@@ -122,7 +122,7 @@
 | | 机器学习 | scikit-learn | 1.3+ |
 | | 词向量 | gensim | 4.3+ |
 | **下游** | 前端框架 | React | 18+ |
-| | UI 组件库 | Ant Design | 5+ |
+| | UI 组件库 | shadcn/ui (Radix UI + Tailwind CSS) | - |
 | | 状态管理 | Zustand | 4+ |
 | | HTTP 客户端 | axios | 1.6+ |
 | | 后端框架 | FastAPI | 0.100+ |
@@ -1623,7 +1623,7 @@ spark-submit --version
 **目标**：React 前端能够展示系统状态和匹配结果。
 
 **任务**：
-- [ ] 项目初始化（React + Ant Design + Zustand）
+- [ ] 项目初始化（React + shadcn/ui + Zustand + Tailwind CSS）
 - [ ] 实现模块 A：系统监控面板
   - [ ] WebSocket 连接
   - [ ] 实时状态显示
