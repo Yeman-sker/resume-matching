@@ -18,11 +18,15 @@ pip install -r requirements.txt
 
 ## 配置
 
-设置环境变量：
-
+1. 复制环境变量模板：
 ```bash
-export OPENAI_API_KEY="your-api-key"
-export OPENAI_API_BASE="https://api.openai.com/v1"  # 可选，默认 OpenAI
+cp .env.example .env
+```
+
+2. 编辑 `.env` 文件，填入你的 API Key：
+```bash
+OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_API_KEY=sk-your-api-key-here
 ```
 
 ## 运行

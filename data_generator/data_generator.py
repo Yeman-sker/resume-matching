@@ -8,6 +8,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 import subprocess
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Resume-Job Data Generator")
 

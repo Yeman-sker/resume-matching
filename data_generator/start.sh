@@ -3,9 +3,12 @@
 
 cd "$(dirname "$0")"
 
-# 检查环境变量
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo "错误：请设置 OPENAI_API_KEY 环境变量"
+# 检查 .env 文件
+if [ ! -f ".env" ]; then
+    echo "错误：未找到 .env 文件"
+    echo "请复制 .env.example 并配置 OPENAI_API_KEY"
+    echo "  cp .env.example .env"
+    echo "  编辑 .env 文件填入你的 API Key"
     exit 1
 fi
 
