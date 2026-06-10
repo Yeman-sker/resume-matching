@@ -1,26 +1,44 @@
 export interface Resume {
   resume_id: string
   name: string
-  phone: string
-  email: string
+  gender: string
+  age: number
   education: string
-  years_of_experience: number
-  skills: string[]
-  city: string
-  expected_salary: string
-  certificates: string[]
+  school: string
+  major: string
+  years_experience: string
+  skills: string
+  certifications: string
+  work_history: string
+  expected_salary: number
+  location: string
+  contact: string
+  education_level: number
+  experience_years_num: number
+  standard_location: string
+  standard_skills: string
 }
 
 export interface Job {
   job_id: string
-  company: string
-  title: string
+  job_title: string
+  department: string
+  location: string
   education_required: string
-  years_required: number
-  skills_required: string[]
-  city: string
+  experience_required: string
+  skills_required: string
+  skills_preferred: string
   salary_range: string
-  certificates_required: string[]
+  job_description: string
+  responsibilities: string
+  requirements: string
+  education_required_level: number
+  experience_required_num: number
+  standard_location: string
+  required_skills_standard: string
+  preferred_skills_standard: string
+  salary_min: number
+  salary_max: number
 }
 
 export interface Match {
@@ -28,16 +46,20 @@ export interface Match {
   job_id: string
   resume_name: string
   job_title: string
-  company: string
+  department: string
+  tfidf_score: number
+  word2vec_score: number
   total_score: number
   semantic_score: number
-  rule_score: number
   skill_score: number
   education_score: number
   experience_score: number
   city_score: number
   salary_score: number
-  cert_score: number
+  certificate_score: number
+  matched_skills: string
+  missing_skills: string
+  reason: string
 }
 
 export interface SystemStatus {

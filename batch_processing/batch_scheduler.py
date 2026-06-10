@@ -1,9 +1,11 @@
 import time
+import os
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 import subprocess
 
 scheduler = BlockingScheduler()
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @scheduler.scheduled_job('interval', minutes=10)
 def run_batch_job():
@@ -11,7 +13,7 @@ def run_batch_job():
     try:
         result = subprocess.run(
             ["spark-submit", "--master", "local[*]", "--driver-memory", "4g", "batch_job.py"],
-            cwd="/Users/yem/Developer/university/projects/resume-matching/batch_processing",
+            cwd=SCRIPT_DIR,
             capture_output=True,
             text=True,
             timeout=300

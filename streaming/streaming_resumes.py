@@ -1,169 +1,267 @@
-import sys
 import json
 import re
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, udf, trim, regexp_replace, when, lit
-from pyspark.sql.types import StringType, IntegerType, ArrayType
+import subprocess
+
 import jieba
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, concat_ws, trim, udf, when
+from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 
-# 初始化 Spark
-spark = SparkSession.builder \
-    .appName("StreamingResumes") \
-    .config("spark.sql.streaming.checkpointLocation", "hdfs://localhost:9000/resume_matching/checkpoints/streaming_resumes") \
+spark = (
+    SparkSession.builder.appName("StreamingResumes")
+    .config(
+        "spark.sql.streaming.checkpointLocation",
+        "hdfs://localhost:9000/resume_matching/checkpoints/streaming_resumes",
+    )
     .getOrCreate()
-
+)
 spark.sparkContext.setLogLevel("WARN")
 
-# 加载停用词和技能别名（从 HDFS）
-stopwords = set()
-skill_alias = {}
+RAW_SCHEMA = StructType(
+    [
+        StructField("resume_id", StringType(), True),
+        StructField("name", StringType(), True),
+        StructField("gender", StringType(), True),
+        StructField("age", StringType(), True),
+        StructField("education", StringType(), True),
+        StructField("school", StringType(), True),
+        StructField("major", StringType(), True),
+        StructField("years_experience", StringType(), True),
+        StructField("skills", StringType(), True),
+        StructField("certifications", StringType(), True),
+        StructField("work_history", StringType(), True),
+        StructField("expected_salary", StringType(), True),
+        StructField("location", StringType(), True),
+        StructField("contact", StringType(), True),
+    ]
+)
 
-try:
-    stopwords_path = "hdfs://localhost:9000/resume_matching/resources/stopwords.json"
-    with open("/tmp/stopwords.json", "w") as f:
-        import subprocess
-        subprocess.run(["hdfs", "dfs", "-get", stopwords_path, "/tmp/stopwords.json"], check=True)
-    with open("/tmp/stopwords.json") as f:
-        stopwords = set(json.load(f))
-except:
-    stopwords = {"的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "一个", "上", "也", "很", "到", "说", "要", "去", "你", "会", "着", "没有", "看", "好", "自己", "这"}
+DEFAULT_STOPWORDS = {
+    "的", "了", "在", "是", "和", "与", "及", "以及", "负责", "要求",
+    "熟悉", "掌握", "了解", "能够", "进行", "相关", "工作", "岗位",
+    "项目", "经验", "具备", "同学", "联系", "更多",
+}
+DEFAULT_SKILL_ALIAS = {
+    "py": "Python",
+    "python": "Python",
+    "python编程": "Python",
+    "sql": "SQL",
+    "sql数据库": "SQL",
+    "mysql": "MySQL",
+    "mysql数据库": "MySQL",
+    "pyspark": "Spark",
+    "apache spark": "Spark",
+    "spark": "Spark",
+    "spring boot": "Spring",
+    "机器学习": "Machine Learning",
+    "数据分析": "Data Analysis",
+    "数据统计": "Data Analysis",
+    "数据可视化": "Data Visualization",
+    "可视化": "Data Visualization",
+    "etl开发": "ETL",
+    "etl": "ETL",
+}
 
-try:
-    alias_path = "hdfs://localhost:9000/resume_matching/resources/skill_alias.json"
-    subprocess.run(["hdfs", "dfs", "-get", alias_path, "/tmp/skill_alias.json"], check=True)
-    with open("/tmp/skill_alias.json") as f:
-        skill_alias = json.load(f)
-except:
-    skill_alias = {"py": "Python", "js": "JavaScript", "java": "Java", "cpp": "C++", "c++": "C++"}
+
+def load_hdfs_json(hdfs_path, local_path, default):
+    try:
+        subprocess.run(
+            ["hdfs", "dfs", "-get", "-f", hdfs_path, local_path],
+            check=True,
+            capture_output=True,
+        )
+        with open(local_path, encoding="utf-8") as file:
+            return json.load(file)
+    except Exception:
+        return default
 
 
-def clean_html(text):
-    """清理 HTML 标签"""
-    if not text:
+stopwords = set(
+    load_hdfs_json(
+        "hdfs://localhost:9000/resume_matching/resources/stopwords.json",
+        "/tmp/resume_matching_stopwords.json",
+        list(DEFAULT_STOPWORDS),
+    )
+)
+loaded_alias = load_hdfs_json(
+    "hdfs://localhost:9000/resume_matching/resources/skill_alias.json",
+    "/tmp/resume_matching_skill_alias.json",
+    DEFAULT_SKILL_ALIAS,
+)
+skill_alias = {str(key).lower(): value for key, value in loaded_alias.items()}
+skill_alias.update(DEFAULT_SKILL_ALIAS)
+
+EDUCATION_LEVEL = {"未知": 0, "高中": 1, "大专": 2, "本科": 3, "硕士": 4, "博士": 5}
+CITY_MAP = {
+    "江西南昌": "南昌",
+    "南昌市": "南昌",
+    "北京市": "北京",
+    "上海市": "上海",
+    "深圳市": "深圳",
+    "杭州市": "杭州",
+    "九江市": "九江",
+    "beijing": "北京",
+    "shanghai": "上海",
+    "shenzhen": "深圳",
+    "hangzhou": "杭州",
+}
+
+
+def clean_text(value):
+    if value is None:
         return ""
-    return re.sub(r'<[^>]+>', '', str(text))
+    text = re.sub(r"<[^>]+>", " ", str(value))
+    return re.sub(r"\s+", " ", text).strip()
 
 
-def normalize_education(edu):
-    """标准化学历"""
-    edu = str(edu).lower().strip()
-    mapping = {
-        "bachelor": "本科", "master": "硕士", "doctor": "博士", "phd": "博士",
-        "大学": "本科", "研究生": "硕士", "专科": "大专", "college": "大专"
-    }
-    for k, v in mapping.items():
-        if k in edu:
-            return v
-    if edu in ["本科", "硕士", "博士", "大专"]:
-        return edu
-    return "本科"
+def normalize_gender(value):
+    text = clean_text(value)
+    return text if text in {"男", "女"} else "未知"
 
 
-def normalize_city(city):
-    """标准化城市"""
-    city = str(city).strip()
-    mapping = {
-        "beijing": "北京", "bj": "北京", "shanghai": "上海", "sh": "上海",
-        "guangzhou": "广州", "gz": "广州", "shenzhen": "深圳", "sz": "深圳",
-        "hangzhou": "杭州", "hz": "杭州", "chengdu": "成都", "cd": "成都"
-    }
-    city_lower = city.lower()
-    return mapping.get(city_lower, city)
+def normalize_age(value):
+    numbers = re.findall(r"-?\d+", clean_text(value))
+    age = int(numbers[0]) if numbers else 22
+    return age if 16 <= age <= 65 else 22
 
 
-def extract_experience_years(exp):
-    """提取工作年限数字"""
-    exp_str = str(exp)
-    match = re.search(r'(\d+)', exp_str)
-    if match:
-        return int(match.group(1))
-
-    chinese_num = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
-    for cn, num in chinese_num.items():
-        if cn in exp_str:
-            return num
-    return 0
-
-
-def normalize_salary(salary):
-    """标准化薪资范围"""
-    salary_str = str(salary)
-    salary_str = re.sub(r'[kK]', '000', salary_str)
-    salary_str = re.sub(r'[~～]', '-', salary_str)
-
-    matches = re.findall(r'(\d+)', salary_str)
-    if len(matches) >= 2:
-        return f"{matches[0]}-{matches[1]}"
-    elif len(matches) == 1:
-        return f"{matches[0]}-{matches[0]}"
-    return "0-0"
+def normalize_education(value):
+    text = clean_text(value)
+    if "博士" in text:
+        return "博士"
+    if "硕士" in text or "研究生" in text:
+        return "硕士"
+    if "本科" in text or "bachelor" in text.lower():
+        return "本科"
+    if "大专" in text or "专科" in text:
+        return "大专"
+    if "高中" in text:
+        return "高中"
+    return "未知"
 
 
-def tokenize_and_filter(text):
-    """分词 + 停用词过滤"""
+def education_level(value):
+    return EDUCATION_LEVEL.get(normalize_education(value), 0)
+
+
+def parse_experience(value):
+    text = clean_text(value)
+    chinese = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+    for key, number in chinese.items():
+        if key in text:
+            return number
+    numbers = re.findall(r"-?\d+", text)
+    years = int(numbers[0]) if numbers else 0
+    return years if 0 <= years <= 40 else 0
+
+
+def normalize_city(value):
+    text = clean_text(value)
     if not text:
-        return []
-    tokens = jieba.lcut(clean_html(str(text)))
-    return [t for t in tokens if t.strip() and t not in stopwords and len(t) > 1]
+        return "未知"
+    compact = text.replace(" ", "")
+    return CITY_MAP.get(compact, CITY_MAP.get(compact.lower(), compact.removesuffix("市")))
 
 
-def normalize_skills(skills_str):
-    """标准化技能列表"""
-    if not skills_str:
-        return json.dumps([])
-
-    cleaned = clean_html(str(skills_str))
-    skills = [s.strip() for s in re.split(r'[,，、]', cleaned) if s.strip()]
-
-    normalized = []
-    for skill in skills:
-        skill_lower = skill.lower()
-        normalized.append(skill_alias.get(skill_lower, skill))
-
-    return json.dumps(list(set(normalized)))
+def normalize_expected_salary(value):
+    numbers = re.findall(r"-?\d+(?:\.\d+)?", clean_text(value))
+    salary = int(float(numbers[0])) if numbers else 0
+    return salary if 0 <= salary <= 100 else 0
 
 
-# 注册 UDF
-clean_html_udf = udf(clean_html, StringType())
+def split_items(value):
+    text = clean_text(value)
+    items = [item.strip() for item in re.split(r"[,，、|]", text) if item.strip()]
+    return "|".join(dict.fromkeys(items))
+
+
+def normalize_skills(value):
+    items_text = split_items(value)
+    items = items_text.split("|") if items_text else []
+    normalized = [skill_alias.get(item.lower(), item) for item in items]
+    return "|".join(dict.fromkeys(normalized))
+
+
+def preprocess_tokens(value):
+    text = clean_text(value)
+    for alias in sorted(skill_alias, key=len, reverse=True):
+        text = re.sub(re.escape(alias), skill_alias[alias], text, flags=re.IGNORECASE)
+    tokens = [
+        token.strip()
+        for token in jieba.lcut(text)
+        if token.strip() and token.strip() not in stopwords
+    ]
+    return json.dumps(tokens, ensure_ascii=False)
+
+
+def tokens_to_clean_text(value):
+    try:
+        return " ".join(json.loads(value or "[]"))
+    except Exception:
+        return ""
+
+
+clean_text_udf = udf(clean_text, StringType())
+normalize_gender_udf = udf(normalize_gender, StringType())
+normalize_age_udf = udf(normalize_age, IntegerType())
 normalize_education_udf = udf(normalize_education, StringType())
+education_level_udf = udf(education_level, IntegerType())
+parse_experience_udf = udf(parse_experience, IntegerType())
 normalize_city_udf = udf(normalize_city, StringType())
-extract_experience_udf = udf(extract_experience_years, IntegerType())
-normalize_salary_udf = udf(normalize_salary, StringType())
-tokenize_udf = udf(tokenize_and_filter, ArrayType(StringType()))
+normalize_expected_salary_udf = udf(normalize_expected_salary, IntegerType())
+split_items_udf = udf(split_items, StringType())
 normalize_skills_udf = udf(normalize_skills, StringType())
+preprocess_tokens_udf = udf(preprocess_tokens, StringType())
+tokens_to_clean_text_udf = udf(tokens_to_clean_text, StringType())
 
-# 读取流数据
-df = spark.readStream \
-    .format("csv") \
-    .option("header", "true") \
-    .option("maxFilesPerTrigger", 1) \
+df = (
+    spark.readStream.format("csv")
+    .schema(RAW_SCHEMA)
+    .option("header", "true")
+    .option("maxFilesPerTrigger", 1)
     .load("hdfs://localhost:9000/resume_matching/raw/resumes")
+)
 
-# 数据清洗
-cleaned_df = df \
-    .filter(col("resume_id").isNotNull()) \
-    .dropDuplicates(["resume_id"]) \
-    .withColumn("name", trim(col("name"))) \
-    .withColumn("gender", when(col("gender").isin(["男", "女"]), col("gender")).otherwise("未知")) \
-    .withColumn("age", regexp_replace(col("age"), r'\D+', '').cast(IntegerType())) \
-    .withColumn("age", when(col("age").between(18, 65), col("age")).otherwise(25)) \
-    .withColumn("education", normalize_education_udf(col("education"))) \
-    .withColumn("major", clean_html_udf(col("major"))) \
-    .withColumn("skills", normalize_skills_udf(col("skills"))) \
-    .withColumn("experience_years", extract_experience_udf(col("experience_years"))) \
-    .withColumn("city", normalize_city_udf(col("city"))) \
-    .withColumn("expected_salary", normalize_salary_udf(col("expected_salary"))) \
-    .withColumn("certificates", clean_html_udf(col("certificates"))) \
-    .withColumn("tokens", tokenize_udf(col("major")))
+cleaned_df = (
+    df.filter(col("resume_id").isNotNull() & (trim(col("resume_id")) != ""))
+    .dropDuplicates(["resume_id"])
+    .withColumn("name", clean_text_udf(col("name")))
+    .withColumn("gender", normalize_gender_udf(col("gender")))
+    .withColumn("age", normalize_age_udf(col("age")))
+    .withColumn("education", normalize_education_udf(col("education")))
+    .withColumn("school", clean_text_udf(col("school")))
+    .withColumn("major", clean_text_udf(col("major")))
+    .withColumn("skills", clean_text_udf(col("skills")))
+    .withColumn("certifications", clean_text_udf(col("certifications")))
+    .withColumn("work_history", clean_text_udf(col("work_history")))
+    .withColumn("contact", clean_text_udf(col("contact")))
+    .withColumn("expected_salary", normalize_expected_salary_udf(col("expected_salary")))
+    .withColumn("location", when(trim(col("location")) == "", "未知").otherwise(col("location")))
+    .withColumn("education_level", education_level_udf(col("education")))
+    .withColumn("experience_years_num", parse_experience_udf(col("years_experience")))
+    .withColumn("standard_location", normalize_city_udf(col("location")))
+    .withColumn("skill_items_raw", split_items_udf(col("skills")))
+    .withColumn("certification_items", split_items_udf(col("certifications")))
+    .withColumn("standard_skills", normalize_skills_udf(col("skills")))
+    .withColumn(
+        "raw_text",
+        concat_ws(" ", col("skills"), col("standard_skills"), col("work_history"), col("major"), col("school")),
+    )
+    .withColumn("tokens", preprocess_tokens_udf(col("raw_text")))
+    .withColumn("clean_text", tokens_to_clean_text_udf(col("tokens")))
+)
 
-# 写入 HDFS
-query = cleaned_df.writeStream \
-    .outputMode("append") \
-    .format("csv") \
-    .option("header", "true") \
-    .option("path", "hdfs://localhost:9000/resume_matching/processed/resumes") \
-    .option("checkpointLocation", "hdfs://localhost:9000/resume_matching/checkpoints/streaming_resumes") \
+query = (
+    cleaned_df.writeStream.outputMode("append")
+    .format("csv")
+    .option("header", "true")
+    .option("path", "hdfs://localhost:9000/resume_matching/processed/resumes")
+    .option(
+        "checkpointLocation",
+        "hdfs://localhost:9000/resume_matching/checkpoints/streaming_resumes",
+    )
     .start()
+)
 
-query.awaitTermination(600)  # 10 分钟后自动退出
+query.awaitTermination(600)
 spark.stop()

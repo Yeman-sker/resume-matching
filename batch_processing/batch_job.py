@@ -1,210 +1,285 @@
-import os
 import json
+import os
 import pickle
+import subprocess
 from datetime import datetime
+
+import numpy as np
+from gensim.models import Word2Vec
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, udf, explode
-from pyspark.sql.types import FloatType, StringType, ArrayType
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from gensim.models import Word2Vec
-import numpy as np
 
-# 初始化 Spark
-spark = SparkSession.builder \
-    .appName("BatchMatching") \
-    .config("spark.driver.memory", "4g") \
-    .config("spark.executor.memory", "4g") \
+spark = (
+    SparkSession.builder.appName("BatchMatching")
+    .config("spark.driver.memory", "4g")
+    .config("spark.executor.memory", "4g")
     .getOrCreate()
-
+)
 spark.sparkContext.setLogLevel("WARN")
 
 HDFS_BASE = "hdfs://localhost:9000/resume_matching"
 MODEL_VERSION = datetime.now().strftime("%Y%m%d%H%M")
+SCORE_WEIGHTS = {
+    "skill": 0.30,
+    "semantic": 0.30,
+    "education": 0.15,
+    "experience": 0.10,
+    "city": 0.05,
+    "salary": 0.05,
+    "certificate": 0.05,
+}
+
+
+def parse_tokens(value):
+    if not value:
+        return []
+    if isinstance(value, list):
+        return value
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, list) else []
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+
+def pipe_to_set(value):
+    if not value:
+        return set()
+    return {item.strip() for item in str(value).split("|") if item.strip()}
+
+
+def similarity_to_score(similarity):
+    return float(max(0.0, min(100.0, (float(similarity) + 1) / 2 * 100)))
+
+
+def calc_tfidf_score(resume_text, job_text, vectorizer):
+    try:
+        vectors = vectorizer.transform([resume_text, job_text])
+        similarity = cosine_similarity(vectors[0], vectors[1])[0][0]
+        return similarity_to_score(similarity)
+    except Exception:
+        return 0.0
+
+
+def average_vector(tokens, model):
+    vectors = [model.wv[token] for token in tokens if token in model.wv]
+    if not vectors:
+        return None
+    return np.mean(vectors, axis=0)
+
+
+def calc_w2v_score(resume_tokens, job_tokens, model):
+    resume_vector = average_vector(resume_tokens, model)
+    job_vector = average_vector(job_tokens, model)
+    if resume_vector is None or job_vector is None:
+        return 0.0
+    denominator = np.linalg.norm(resume_vector) * np.linalg.norm(job_vector)
+    if denominator == 0:
+        return 0.0
+    similarity = np.dot(resume_vector, job_vector) / denominator
+    return similarity_to_score(similarity)
+
+
+def score_skill(resume_skills, required_skills, preferred_skills):
+    if not required_skills:
+        return 60.0, set(), set()
+    matched = resume_skills & required_skills
+    missing = required_skills - resume_skills
+    required_score = len(matched) / len(required_skills) * 85
+    preferred_bonus = min(len(resume_skills & preferred_skills) * 5, 15)
+    return min(required_score + preferred_bonus, 100.0), matched, missing
+
+
+def score_education(resume_level, required_level):
+    if required_level == 0 or resume_level >= required_level:
+        return 100.0
+    return 60.0 if required_level - resume_level == 1 else 30.0
+
+
+def score_experience(resume_years, required_years):
+    if resume_years >= required_years:
+        return 100.0
+    gap = required_years - resume_years
+    if gap == 1:
+        return 70.0
+    if gap == 2:
+        return 40.0
+    return 20.0
+
+
+def score_city(resume_city, job_city):
+    if resume_city == "未知" or job_city == "未知":
+        return 60.0
+    return 100.0 if resume_city == job_city else 50.0
+
+
+def score_salary(expected_salary, salary_max):
+    if expected_salary <= 0 or salary_max <= 0:
+        return 60.0
+    if salary_max >= expected_salary:
+        return 100.0
+    return 70.0 if salary_max / expected_salary >= 0.8 else 40.0
+
+
+def score_certificate(certifications):
+    return 100.0 if certifications else 60.0
+
+
+def display_skills(skills):
+    return "、".join(sorted(skills)) if skills else "无"
+
+
+def build_reason(scores, matched, missing):
+    reasons = []
+    if scores["skill_score"] >= 80:
+        reasons.append(f"技能匹配较高，共同技能包括：{display_skills(matched)}")
+    elif scores["skill_score"] >= 50:
+        reasons.append(f"技能部分匹配，共同技能包括：{display_skills(matched)}")
+    else:
+        reasons.append("技能匹配偏低，需要补充岗位核心技能")
+    if missing:
+        reasons.append(f"仍缺少技能：{display_skills(missing)}")
+
+    if scores["semantic_score"] >= 80:
+        reasons.append("简历文本与岗位描述方向非常接近")
+    elif scores["semantic_score"] >= 50:
+        reasons.append("简历文本与岗位描述存在一定相关性")
+    else:
+        reasons.append("文本相似度较低")
+
+    reasons.append("学历满足要求" if scores["education_score"] == 100 else "学历与岗位要求存在差距")
+    if scores["experience_score"] == 100:
+        reasons.append("经验年限满足岗位要求")
+    elif scores["experience_score"] >= 70:
+        reasons.append("经验略低于要求，但差距不大")
+    else:
+        reasons.append("经验年限与岗位要求差距较大")
+    reasons.append("城市匹配" if scores["city_score"] == 100 else "城市不完全匹配")
+    return "；".join(reasons)
+
 
 print(f"[{datetime.now()}] 开始批处理任务...")
-
-# 1. 读取清洗后的数据
 print("[1/5] 读取数据...")
 resumes_df = spark.read.csv(f"{HDFS_BASE}/processed/resumes", header=True, inferSchema=True)
 jobs_df = spark.read.csv(f"{HDFS_BASE}/processed/jobs", header=True, inferSchema=True)
+resumes = resumes_df.collect()
+jobs = jobs_df.collect()
+print(f"  简历数: {len(resumes)}, 岗位数: {len(jobs)}")
 
-resume_count = resumes_df.count()
-job_count = jobs_df.count()
-print(f"  简历数: {resume_count}, 岗位数: {job_count}")
-
-if resume_count == 0 or job_count == 0:
+if not resumes or not jobs:
     print("数据不足，跳过本次任务")
     spark.stop()
-    exit(0)
+    raise SystemExit(0)
 
-# 2. 训练 TF-IDF 模型
-print("[2/5] 训练 TF-IDF 模型...")
-resume_texts = resumes_df.select("resume_id", "tokens").collect()
-job_texts = jobs_df.select("job_id", "tokens").collect()
-
-resume_corpus = {r.resume_id: " ".join(eval(r.tokens) if isinstance(r.tokens, str) else r.tokens) for r in resume_texts if r.tokens}
-job_corpus = {j.job_id: " ".join(eval(j.tokens) if isinstance(j.tokens, str) else j.tokens) for j in job_texts if j.tokens}
-
+resume_corpus = {row.resume_id: str(row.clean_text or "") for row in resumes}
+job_corpus = {row.job_id: str(row.clean_text or "") for row in jobs}
+resume_tokens = {row.resume_id: parse_tokens(row.tokens) for row in resumes}
+job_tokens = {row.job_id: parse_tokens(row.tokens) for row in jobs}
 all_texts = list(resume_corpus.values()) + list(job_corpus.values())
-tfidf = TfidfVectorizer(max_features=500)
+all_tokens = list(resume_tokens.values()) + list(job_tokens.values())
+
+print("[2/5] 训练 TF-IDF 模型...")
+tfidf = TfidfVectorizer(max_features=500, token_pattern=r"(?u)\b\w+\b")
 tfidf.fit(all_texts)
 
-# 保存模型到本地
 os.makedirs("/tmp/models", exist_ok=True)
-with open(f"/tmp/models/tfidf_v{MODEL_VERSION}.pkl", "wb") as f:
-    pickle.dump(tfidf, f)
+tfidf_path = f"/tmp/models/tfidf_v{MODEL_VERSION}.pkl"
+with open(tfidf_path, "wb") as file:
+    pickle.dump(tfidf, file)
 
-# 3. 训练 Word2Vec 模型
 print("[3/5] 训练 Word2Vec 模型...")
-all_tokens = []
-for r in resume_texts:
-    if r.tokens:
-        tokens = eval(r.tokens) if isinstance(r.tokens, str) else r.tokens
-        all_tokens.append(tokens)
-for j in job_texts:
-    if j.tokens:
-        tokens = eval(j.tokens) if isinstance(j.tokens, str) else j.tokens
-        all_tokens.append(tokens)
+w2v = Word2Vec(
+    sentences=all_tokens,
+    vector_size=100,
+    window=5,
+    min_count=1,
+    workers=4,
+    seed=42,
+    epochs=30,
+)
+w2v_path = f"/tmp/models/word2vec_v{MODEL_VERSION}.model"
+w2v.save(w2v_path)
 
-w2v = Word2Vec(sentences=all_tokens, vector_size=100, window=5, min_count=1, workers=4)
-w2v.save(f"/tmp/models/word2vec_v{MODEL_VERSION}.model")
-
-# 4. 计算匹配分数
 print("[4/5] 计算匹配分数...")
-
-def calc_tfidf_score(resume_text, job_text):
-    try:
-        vecs = tfidf.transform([resume_text, job_text]).toarray()
-        sim = cosine_similarity([vecs[0]], [vecs[1]])[0][0]
-        return float((sim + 1) / 2 * 100)
-    except:
-        return 0.0
-
-def calc_w2v_score(resume_tokens, job_tokens):
-    try:
-        r_tokens = eval(resume_tokens) if isinstance(resume_tokens, str) else resume_tokens
-        j_tokens = eval(job_tokens) if isinstance(job_tokens, str) else job_tokens
-
-        r_vec = np.mean([w2v.wv[t] for t in r_tokens if t in w2v.wv], axis=0)
-        j_vec = np.mean([w2v.wv[t] for t in j_tokens if t in w2v.wv], axis=0)
-
-        if len(r_vec) == 0 or len(j_vec) == 0:
-            return 0.0
-
-        sim = np.dot(r_vec, j_vec) / (np.linalg.norm(r_vec) * np.linalg.norm(j_vec))
-        return float((sim + 1) / 2 * 100)
-    except:
-        return 0.0
-
-def calc_skill_score(resume_skills, job_skills):
-    try:
-        r_skills = set(json.loads(resume_skills) if isinstance(resume_skills, str) else resume_skills)
-        j_skills = set(json.loads(job_skills) if isinstance(job_skills, str) else job_skills)
-        if not j_skills:
-            return 100.0
-        match = len(r_skills & j_skills)
-        return float(match / len(j_skills) * 100)
-    except:
-        return 0.0
-
-def calc_education_score(resume_edu, job_edu):
-    edu_rank = {"大专": 1, "本科": 2, "硕士": 3, "博士": 4}
-    r_rank = edu_rank.get(resume_edu, 2)
-    j_rank = edu_rank.get(job_edu, 2)
-    return 100.0 if r_rank >= j_rank else max(0, 100 - (j_rank - r_rank) * 20)
-
-def calc_experience_score(resume_exp, job_exp):
-    try:
-        r_exp = int(resume_exp) if resume_exp else 0
-        j_exp = int(job_exp) if job_exp else 0
-        if r_exp >= j_exp:
-            return 100.0
-        return max(0, 100 - (j_exp - r_exp) * 15)
-    except:
-        return 0.0
-
-def calc_city_score(resume_city, job_city):
-    return 100.0 if resume_city == job_city else 0.0
-
-def calc_salary_score(resume_salary, job_salary):
-    try:
-        r_min, r_max = map(int, resume_salary.split("-"))
-        j_min, j_max = map(int, job_salary.split("-"))
-        r_avg = (r_min + r_max) / 2
-        j_avg = (j_min + j_max) / 2
-        diff = abs(r_avg - j_avg) / max(j_avg, 1)
-        return max(0, 100 - diff * 50)
-    except:
-        return 50.0
-
-def calc_cert_score(resume_certs, job_certs):
-    try:
-        r_certs = set(c.strip() for c in resume_certs.split(",") if c.strip())
-        j_certs = set(c.strip() for c in job_certs.split(",") if c.strip())
-        if not j_certs:
-            return 100.0
-        match = len(r_certs & j_certs)
-        return float(match / len(j_certs) * 100)
-    except:
-        return 0.0
-
-# 笛卡尔积计算
 results = []
-for resume in resumes_df.collect():
-    r_id = resume.resume_id
-    r_text = resume_corpus.get(r_id, "")
-    r_tokens = resume.tokens
+for resume in resumes:
+    for job in jobs:
+        tfidf_score = calc_tfidf_score(
+            resume_corpus.get(resume.resume_id, ""),
+            job_corpus.get(job.job_id, ""),
+            tfidf,
+        )
+        word2vec_score = calc_w2v_score(
+            resume_tokens.get(resume.resume_id, []),
+            job_tokens.get(job.job_id, []),
+            w2v,
+        )
+        semantic_score = tfidf_score * 0.60 + word2vec_score * 0.40
 
-    for job in jobs_df.collect():
-        j_id = job.job_id
-        j_text = job_corpus.get(j_id, "")
-        j_tokens = job.tokens
+        skill_score, matched, missing = score_skill(
+            pipe_to_set(resume.standard_skills),
+            pipe_to_set(job.required_skills_standard),
+            pipe_to_set(job.preferred_skills_standard),
+        )
+        scores = {
+            "semantic_score": semantic_score,
+            "skill_score": skill_score,
+            "education_score": score_education(
+                int(resume.education_level or 0),
+                int(job.education_required_level or 0),
+            ),
+            "experience_score": score_experience(
+                int(resume.experience_years_num or 0),
+                int(job.experience_required_num or 0),
+            ),
+            "city_score": score_city(
+                str(resume.standard_location or "未知"),
+                str(job.standard_location or "未知"),
+            ),
+            "salary_score": score_salary(
+                int(resume.expected_salary or 0),
+                int(job.salary_max or 0),
+            ),
+            "certificate_score": score_certificate(
+                pipe_to_set(resume.certification_items)
+            ),
+        }
+        total_score = sum(scores[name + "_score"] * weight for name, weight in SCORE_WEIGHTS.items())
 
-        # 语义分
-        tfidf_score = calc_tfidf_score(r_text, j_text)
-        w2v_score = calc_w2v_score(r_tokens, j_tokens)
-        semantic_score = tfidf_score * 0.6 + w2v_score * 0.4
-
-        # 规则分
-        skill_score = calc_skill_score(resume.skills, job.required_skills)
-        edu_score = calc_education_score(resume.education, job.required_education)
-        exp_score = calc_experience_score(resume.experience_years, job.required_experience)
-        city_score = calc_city_score(resume.city, job.city)
-        salary_score = calc_salary_score(resume.expected_salary, job.salary_range)
-        cert_score = calc_cert_score(resume.certificates, job.required_certificates)
-
-        rule_score = (skill_score * 0.4 + edu_score * 0.2 + exp_score * 0.15 +
-                      city_score * 0.1 + salary_score * 0.1 + cert_score * 0.05)
-
-        # 总分
-        total_score = semantic_score * 0.6 + rule_score * 0.4
-
-        results.append({
-            "resume_id": r_id,
-            "job_id": j_id,
-            "total_score": round(total_score, 2),
-            "semantic_score": round(semantic_score, 2),
-            "rule_score": round(rule_score, 2),
-            "skill_score": round(skill_score, 2),
-            "education_score": round(edu_score, 2),
-            "experience_score": round(exp_score, 2),
-            "city_score": round(city_score, 2),
-            "salary_score": round(salary_score, 2),
-            "certificate_score": round(cert_score, 2)
-        })
+        results.append(
+            {
+                "resume_id": resume.resume_id,
+                "resume_name": resume.name,
+                "job_id": job.job_id,
+                "job_title": job.job_title,
+                "department": job.department,
+                "tfidf_score": round(tfidf_score, 4),
+                "word2vec_score": round(word2vec_score, 4),
+                **{key: round(value, 4) for key, value in scores.items()},
+                "total_score": round(total_score, 4),
+                "matched_skills": "|".join(sorted(matched)),
+                "missing_skills": "|".join(sorted(missing)),
+                "reason": build_reason(scores, matched, missing),
+            }
+        )
 
 print(f"  计算完成，生成 {len(results)} 条匹配记录")
-
-# 5. 写入结果
 print("[5/5] 写入匹配结果...")
 result_df = spark.createDataFrame(results)
-result_df.coalesce(1).write.mode("overwrite").csv(f"{HDFS_BASE}/output/matches", header=True)
+result_df.coalesce(1).write.mode("overwrite").csv(
+    f"{HDFS_BASE}/output/matches",
+    header=True,
+)
 
-# 上传模型到 HDFS
-import subprocess
-subprocess.run(["hdfs", "dfs", "-put", "-f", f"/tmp/models/tfidf_v{MODEL_VERSION}.pkl", f"{HDFS_BASE}/models/tfidf/"], check=False)
-subprocess.run(["hdfs", "dfs", "-put", "-f", f"/tmp/models/word2vec_v{MODEL_VERSION}.model", f"{HDFS_BASE}/models/word2vec/"], check=False)
+subprocess.run(
+    ["hdfs", "dfs", "-put", "-f", tfidf_path, f"{HDFS_BASE}/models/tfidf/"],
+    check=False,
+)
+subprocess.run(
+    ["hdfs", "dfs", "-put", "-f", w2v_path, f"{HDFS_BASE}/models/word2vec/"],
+    check=False,
+)
 
 print(f"[{datetime.now()}] 批处理任务完成！")
 spark.stop()

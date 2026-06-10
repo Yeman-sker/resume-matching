@@ -27,6 +27,10 @@ cp .env.example .env
 ```bash
 OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_API_KEY=sk-your-api-key-here
+OPENAI_MODEL=your-model
+BATCH_SIZE=20
+GENERATION_INTERVAL=10
+FLUSH_INTERVAL=60
 ```
 
 ## 运行
@@ -78,24 +82,25 @@ curl http://localhost:8000/status
 
 ## 数据输出
 
-- **简历数据**：`hdfs://localhost:9000/resume_matching/raw/resumes/YYYY-MM-DD_HH-MM.csv`
-- **岗位数据**：`hdfs://localhost:9000/resume_matching/raw/jobs/YYYY-MM-DD_HH-MM.csv`
+- **简历数据**：`hdfs://localhost:9000/resume_matching/raw/resumes/*.csv`
+- **岗位数据**：`hdfs://localhost:9000/resume_matching/raw/jobs/*.csv`
 
 ## 脏数据类型
 
 | 字段 | 脏数据类型 | 概率 |
 |------|-----------|------|
 | resume_id/job_id | 空值或重复ID | 5% |
-| gender | 格式错误（m/f/Male） | 10% |
-| age | 中文数字（二十五） | 5% |
-| education | 英文（Bachelor/Master） | 10% |
-| skills | 包含HTML标签 | 15% |
-| experience_years | 文本描述（三年经验） | 5% |
-| city | 英文或缩写（Beijing/BJ） | 10% |
-| salary_range | 格式混乱（15k~20k） | 10% |
+| age | 异常值（-3/88） | 少量 |
+| education | 写法不统一（本科/本科学历/本科及以上） | 少量 |
+| skills | 别名不统一（py/python/Apache Spark） | 少量 |
+| years_experience | 文本描述（一年/3年以上） | 少量 |
+| location | 写法不统一（南昌/南昌市/江西南昌） | 少量 |
+| expected_salary | 异常值（0/999） | 少量 |
 
 ## 生成策略
 
 - **批量大小**：每轮并发生成 20 条数据（10简历 + 10岗位）
 - **刷新间隔**：每 60 秒将缓冲区写入 HDFS
-- **速率控制**：取决于 OpenAI API 响应速度，约 1-2 条/秒
+- **最大并发**：4
+- **批次间隔**：默认 10 秒
+- **失败重试**：超时、429、5xx 最多重试 2 次
