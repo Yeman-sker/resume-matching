@@ -27,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 下游：FastAPI
 
 **前端**：
-- React 18 + Ant Design 5 + Zustand
+- React 18 + shadcn/ui (Radix UI + Tailwind CSS) + Zustand
 
 ## 开发命令
 
