@@ -2,6 +2,7 @@ import os
 import json
 import time
 import asyncio
+import logging
 from datetime import datetime
 from typing import List, Dict
 from fastapi import FastAPI, HTTPException
@@ -13,10 +14,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI(title="Resume-Job Data Generator")
+logger = logging.getLogger("data_generator")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 # 配置
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "deepseek-v4-flash")
 HDFS_BASE_PATH = "/resume_matching/raw"
 BATCH_SIZE = 20
 FLUSH_INTERVAL = 60
@@ -40,13 +47,22 @@ async def call_openai(prompt: str, system: str = None) -> str:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        resp = await client.post(
-            f"{OPENAI_API_BASE}/chat/completions",
-            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-            json={"model": "gpt-4", "messages": messages, "temperature": 0.9}
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        logger.info("模型请求开始 | model=%s", OPENAI_MODEL)
+        try:
+            resp = await client.post(
+                f"{OPENAI_API_BASE}/chat/completions",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                json={"model": OPENAI_MODEL, "messages": messages, "temperature": 0.9}
+            )
+            resp.raise_for_status()
+        except Exception:
+            logger.exception("模型请求失败 | model=%s", OPENAI_MODEL)
+            raise
+
+        content = resp.json()["choices"][0]["message"]["content"]
+        logger.info("模型请求成功 | model=%s | status=%s", OPENAI_MODEL, resp.status_code)
+        logger.info("模型返回数据 | %s", content)
+        return content
 
 
 def write_to_hdfs(data: List[Dict], path: str):
@@ -68,8 +84,17 @@ def write_to_hdfs(data: List[Dict], path: str):
                 f.write(",".join(row) + "\n")
 
     # 上传到 HDFS
-    subprocess.run(["hdfs", "dfs", "-put", local_file, f"{path}/{filename}"], check=True)
-    os.remove(local_file)
+    target = f"{path}/{filename}"
+    logger.info("HDFS 推送开始 | records=%s | target=%s", len(data), target)
+    try:
+        subprocess.run(["hdfs", "dfs", "-put", local_file, target], check=True)
+        logger.info("HDFS 推送成功 | records=%s | target=%s", len(data), target)
+    except Exception:
+        logger.exception("HDFS 推送失败 | records=%s | target=%s", len(data), target)
+        raise
+    finally:
+        if os.path.exists(local_file):
+            os.remove(local_file)
 
 
 async def generate_resume() -> Dict:
@@ -144,6 +169,7 @@ async def generation_loop():
     while is_generating:
         try:
             # 并发生成一批数据
+            logger.info("数据生成批次开始 | batch_size=%s", BATCH_SIZE)
             tasks = []
             for _ in range(BATCH_SIZE // 2):
                 tasks.append(generate_resume())
@@ -153,11 +179,18 @@ async def generation_loop():
 
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
+                    logger.error("数据生成失败 | task_index=%s | error=%s", i, result)
                     continue
                 if i % 2 == 0:
                     resume_buffer.append(result)
                 else:
                     job_buffer.append(result)
+
+            logger.info(
+                "数据生成批次完成 | resume_buffer=%s | job_buffer=%s",
+                len(resume_buffer),
+                len(job_buffer),
+            )
 
             # 定时刷新
             if time.time() - last_flush >= FLUSH_INTERVAL:
@@ -165,7 +198,7 @@ async def generation_loop():
                 last_flush = time.time()
 
         except Exception as e:
-            print(f"生成错误: {e}")
+            logger.exception("生成循环错误 | error=%s", e)
             await asyncio.sleep(5)
 
 
