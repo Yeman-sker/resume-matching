@@ -14,6 +14,10 @@ import type {
   GeneratorConfig,
 } from '@/types'
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 interface AppStore {
   status: SystemStatus | null
   ws: WebSocket | null
@@ -56,8 +60,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const ws = new WebSocket(`${protocol}//${window.location.hostname}:8002/ws`)
     ws.onopen = () => console.log('WebSocket connected')
     ws.onmessage = (event) => {
-      const status = JSON.parse(event.data)
-      set({ status })
+      try {
+        const status = JSON.parse(event.data) as SystemStatus
+        set({ status })
+      } catch (err) {
+        console.error('Invalid WebSocket message:', getErrorMessage(err))
+      }
     }
     ws.onerror = (error) => console.error('WebSocket error:', error)
     ws.onclose = () => {
@@ -80,8 +88,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const res = await api.get<JobsResponse>('/api/jobs', { params: { page, page_size: pageSize } })
       set({ jobs: res.data.jobs, loading: false })
-    } catch (err: any) {
-      set({ error: err.message, loading: false })
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err), loading: false })
     }
   },
 
@@ -90,8 +98,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const res = await api.get<ResumesResponse>('/api/resumes', { params: { page, page_size: pageSize } })
       set({ resumes: res.data.resumes, loading: false })
-    } catch (err: any) {
-      set({ error: err.message, loading: false })
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err), loading: false })
     }
   },
 
@@ -114,8 +122,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const res = await api.get<Stats>('/api/stats')
       set({ stats: res.data })
-    } catch (err: any) {
-      console.error('Failed to fetch stats:', err.message)
+    } catch (err: unknown) {
+      console.error('Failed to fetch stats:', getErrorMessage(err))
     }
   },
 

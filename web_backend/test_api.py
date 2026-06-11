@@ -104,8 +104,8 @@ async def test_api():
                 print(f"   ✓ 状态码: {resp.status_code}")
                 data = resp.json()
                 print(f"   ✓ 简历: {data.get('resume_name', 'N/A')}")
-                print(f"   ✓ 推荐数: {data.get('total_recommendations', 0)}")
-                print(f"   ✓ 返回: {len(data.get('recommendations', []))} 条")
+                print(f"   ✓ 推荐数: {data.get('total_matches', 0)}")
+                print(f"   ✓ 返回: {len(data.get('matches', []))} 条")
                 tests.append(resp.status_code == 200)
             else:
                 print(f"   ⊘ 跳过（无简历数据）")
@@ -144,11 +144,15 @@ async def test_api():
             print(f"   ✗ 错误: {e}")
             tests.append(False)
 
-        # 8. 测试生成器控制接口（不实际调用，只检查接口可达性）
-        print("\n8. 测试生成器状态（模拟调用）")
-        print(f"   ℹ POST /api/generator/start - 接口已注册")
-        print(f"   ℹ POST /api/generator/stop - 接口已注册")
-        tests.append(True)
+        # 8. 测试生成器状态接口
+        print("\n8. 测试生成器状态 GET /api/generator/status")
+        try:
+            resp = await client.get(f"{BASE_URL}/api/generator/status")
+            print(f"   ✓ 状态码: {resp.status_code}")
+            tests.append(resp.status_code in (200, 503))
+        except Exception as e:
+            print(f"   ✗ 错误: {e}")
+            tests.append(False)
 
         # 汇总
         print("\n" + "="*60)

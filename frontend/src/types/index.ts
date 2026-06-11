@@ -153,6 +153,8 @@ export interface GeneratorStatus {
   buffer_size: { resumes: number; jobs: number }
   last_flush_time: string
   generation_rate: { resumes_per_minute: number; jobs_per_minute: number }
+  recent_resumes?: Resume[]
+  recent_jobs?: Job[]
 }
 
 export interface GeneratorConfig {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { useAppStore } from '@/store'
 import type { MatchDetail as MatchDetailType } from '@/types'
@@ -16,17 +16,28 @@ export default function MatchDetailPage() {
 
   const from = searchParams.get('from')
   const fromId = searchParams.get('fromId')
-  const backLink = from === 'resumes' ? `/resumes?resumeId=${fromId}` : `/jobs?jobId=${fromId}`
+  const backLink = from === 'resumes'
+    ? `/resumes?resumeId=${fromId || resumeId || ''}`
+    : `/jobs?jobId=${fromId || jobId || ''}`
 
-  useEffect(() => {
+  const loadDetail = useCallback(async () => {
     if (resumeId && jobId) {
       setLoading(true)
-      fetchMatchDetail(resumeId, jobId)
-        .then((data) => setDetail(data))
-        .catch(() => setDetail(null))
-        .finally(() => setLoading(false))
+      try {
+        const data = await fetchMatchDetail(resumeId, jobId)
+        setDetail(data)
+      } catch {
+        setDetail(null)
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [resumeId, jobId])
+  }, [fetchMatchDetail, jobId, resumeId])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadDetail(), 0)
+    return () => window.clearTimeout(timer)
+  }, [loadDetail])
 
   if (loading) return <LoadingSpinner />
   if (!detail) return <div className="text-center py-12 text-muted-foreground">未找到匹配详情</div>
@@ -41,7 +52,7 @@ export default function MatchDetailPage() {
         <h1 className="text-2xl font-bold mt-1">匹配详情</h1>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">简历信息</CardTitle>
@@ -71,6 +82,9 @@ export default function MatchDetailPage() {
             <div><span className="text-muted-foreground">经验要求:</span> {job.experience_required}</div>
             <div><span className="text-muted-foreground">薪资范围:</span> {job.salary_range}</div>
             <div><span className="text-muted-foreground">必备技能:</span> {formatSkills(job.required_skills_standard || job.skills_required).join('、')}</div>
+            {job.preferred_skills_standard && (
+              <div><span className="text-muted-foreground">加分技能:</span> {formatSkills(job.preferred_skills_standard).join('、')}</div>
+            )}
           </CardContent>
         </Card>
       </div>

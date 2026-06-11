@@ -5,6 +5,7 @@ import asyncio
 import pandas as pd
 import sys
 import httpx
+from main import app
 
 # 模拟数据
 MOCK_RESUMES = pd.DataFrame([
@@ -115,8 +116,9 @@ async def mock_test():
 
     print("✓ 模拟数据已注入缓存\n")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        base_url = "http://localhost:8002"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", timeout=10.0) as client:
+        base_url = ""
 
         # 1. 测试统计接口
         print("1. 测试统计接口 GET /api/stats")
@@ -163,10 +165,10 @@ async def mock_test():
         resp = await client.get(f"{base_url}/api/resumes/RES_001/recommendations?limit=10")
         data = resp.json()
         print(f"   ✓ 简历: {data['resume_name']}")
-        print(f"   ✓ 推荐总数: {data['total_recommendations']}")
-        print(f"   ✓ 返回: {len(data['recommendations'])} 条")
-        if data['recommendations']:
-            rec = data['recommendations'][0]
+        print(f"   ✓ 推荐总数: {data['total_matches']}")
+        print(f"   ✓ 返回: {len(data['matches'])} 条")
+        if data['matches']:
+            rec = data['matches'][0]
             print(f"      Top 1: {rec['job_title']} (总分: {rec['total_score']})")
 
         # 6. 测试匹配详情
@@ -194,6 +196,9 @@ async def mock_test():
         resp = await client.get(f"{base_url}/api/resumes?search=张")
         data = resp.json()
         print(f"   ✓ 搜索'张': {data['total']} 条")
+
+        resp = await client.get(f"{base_url}/api/generator/status")
+        print(f"   ✓ 生成器状态接口可达: {resp.status_code in (200, 503)}")
 
         print("\n" + "="*60)
         print("✓ 所有测试通过")

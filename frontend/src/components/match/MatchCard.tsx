@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Match } from '@/types'
 import ScoreBar from '@/components/match/ScoreBar'
@@ -10,15 +11,14 @@ interface MatchCardProps {
 
 export default function MatchCard({ match, rank, mode }: MatchCardProps) {
   const navigate = useNavigate()
+  const [showReason, setShowReason] = useState(false)
   const title = mode === 'job' ? match.resume_name : match.job_title
   const subtitle = mode === 'job' ? match.job_title : match.resume_name
+  const from = mode === 'job' ? 'jobs' : 'resumes'
+  const fromId = mode === 'job' ? match.job_id : match.resume_id
 
-  const matchedList = match.matched_skills
-    ? match.matched_skills.split('|').filter(Boolean)
-    : []
-  const missingList = match.missing_skills
-    ? match.missing_skills.split('|').filter(Boolean)
-    : []
+  const matchedList = match.matched_skills ? match.matched_skills.split('|').filter(Boolean) : []
+  const missingList = match.missing_skills ? match.missing_skills.split('|').filter(Boolean) : []
 
   return (
     <div className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
@@ -36,7 +36,7 @@ export default function MatchCard({ match, rank, mode }: MatchCardProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-2">
         <ScoreBar label="语义分" value={match.semantic_score} weight="60%" />
         <ScoreBar label="技能分" value={match.skill_score} weight="40%" />
         <ScoreBar label="学历分" value={match.education_score} weight="20%" />
@@ -48,9 +48,7 @@ export default function MatchCard({ match, rank, mode }: MatchCardProps) {
       <div className="space-y-1">
         <div className="text-xs">
           <span className="text-green-700 font-medium">共同技能: </span>
-          <span className="text-green-600">
-            {matchedList.length > 0 ? matchedList.join('、') : '无'}
-          </span>
+          <span className="text-green-600">{matchedList.length > 0 ? matchedList.join('、') : '无'}</span>
         </div>
         {missingList.length > 0 && (
           <div className="text-xs">
@@ -60,8 +58,17 @@ export default function MatchCard({ match, rank, mode }: MatchCardProps) {
         )}
       </div>
 
+      {match.reason && (
+        <div className="text-xs">
+          <button className="text-primary hover:underline" onClick={() => setShowReason((value) => !value)}>
+            {showReason ? '收起推荐理由' : '展开推荐理由'}
+          </button>
+          {showReason && <div className="mt-1 whitespace-pre-line text-muted-foreground">{match.reason}</div>}
+        </div>
+      )}
+
       <button
-        onClick={() => navigate(`/match/${match.resume_id}/${match.job_id}`)}
+        onClick={() => navigate(`/match/${match.resume_id}/${match.job_id}?from=${from}&fromId=${fromId}`)}
         className="text-sm text-primary hover:underline"
       >
         查看详情 →

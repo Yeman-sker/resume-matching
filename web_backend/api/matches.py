@@ -81,8 +81,8 @@ async def get_resume_recommendations(
         return {
             "resume_id": resume_id,
             "resume_name": resume_info.get("name", ""),
-            "total_recommendations": 0,
-            "recommendations": [],
+            "total_matches": 0,
+            "matches": [],
         }
 
     # 筛选并排序
@@ -100,8 +100,8 @@ async def get_resume_recommendations(
     return {
         "resume_id": resume_id,
         "resume_name": resume_info.get("name", ""),
-        "total_recommendations": total,
-        "recommendations": items,
+        "total_matches": total,
+        "matches": items,
     }
 
 

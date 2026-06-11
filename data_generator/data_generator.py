@@ -30,6 +30,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "deepseek-v4-flash")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "20"))
 GENERATION_INTERVAL = float(os.getenv("GENERATION_INTERVAL", "10"))
+RESUME_INTERVAL = float(os.getenv("RESUME_INTERVAL", str(GENERATION_INTERVAL)))
+JOB_INTERVAL = float(os.getenv("JOB_INTERVAL", str(GENERATION_INTERVAL)))
 FLUSH_INTERVAL = float(os.getenv("FLUSH_INTERVAL", "60"))
 MAX_CONCURRENCY = 4
 MAX_RETRIES = 2
@@ -131,7 +133,9 @@ JSON 必须严格包含且只包含以下字段：
 is_generating = False
 resume_buffer: List[Dict] = []
 job_buffer: List[Dict] = []
-stats = {"resumes": 0, "jobs": 0, "last_flush": None}
+stats = {"resumes": 0, "jobs": 0, "last_flush": None, "started_at": None}
+recent_resumes: List[Dict] = []
+recent_jobs: List[Dict] = []
 request_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 http_client: httpx.AsyncClient | None = None
 
@@ -152,6 +156,9 @@ app = FastAPI(title="Resume-Job Data Generator", lifespan=lifespan)
 
 class GeneratorControl(BaseModel):
     action: str
+    resume_interval_seconds: float | None = None
+    job_interval_seconds: float | None = None
+    flush_interval_seconds: float | None = None
 
 
 def parse_json_object(content: str, required_fields: List[str]) -> Dict:
@@ -346,44 +353,46 @@ async def flush_buffers() -> None:
 async def generation_loop() -> None:
     global is_generating
     last_flush = time.time()
+    last_resume = 0.0
+    last_job = 0.0
 
     while is_generating:
         try:
-            logger.info("数据生成批次开始 | batch_size=%s", BATCH_SIZE)
+            now = time.time()
             tasks = []
-            for _ in range(BATCH_SIZE // 2):
-                tasks.extend([generate_resume(), generate_job()])
+            if now - last_resume >= RESUME_INTERVAL:
+                tasks.append(("resume", generate_resume()))
+                last_resume = now
+            if now - last_job >= JOB_INTERVAL:
+                tasks.append(("job", generate_job()))
+                last_job = now
 
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            success_count = 0
-            for index, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logger.error(
-                        "数据生成失败 | task_index=%s | error_type=%s | error=%r",
-                        index,
-                        type(result).__name__,
-                        result,
-                    )
-                    continue
-                success_count += 1
-                if index % 2 == 0:
-                    resume_buffer.append(result)
-                else:
-                    job_buffer.append(result)
-
-            logger.info(
-                "数据生成批次完成 | success=%s | failed=%s | resume_buffer=%s | job_buffer=%s",
-                success_count,
-                len(results) - success_count,
-                len(resume_buffer),
-                len(job_buffer),
-            )
+            if tasks:
+                logger.info("数据生成批次开始 | tasks=%s", [name for name, _ in tasks])
+                results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
+                for (data_type, _), result in zip(tasks, results):
+                    if isinstance(result, Exception):
+                        logger.error(
+                            "数据生成失败 | type=%s | error_type=%s | error=%r",
+                            data_type,
+                            type(result).__name__,
+                            result,
+                        )
+                        continue
+                    if data_type == "resume":
+                        resume_buffer.append(result)
+                        recent_resumes.insert(0, result)
+                        del recent_resumes[5:]
+                    else:
+                        job_buffer.append(result)
+                        recent_jobs.insert(0, result)
+                        del recent_jobs[5:]
 
             if time.time() - last_flush >= FLUSH_INTERVAL:
                 await flush_buffers()
                 last_flush = time.time()
 
-            await asyncio.sleep(GENERATION_INTERVAL)
+            await asyncio.sleep(1)
         except Exception as exc:
             logger.exception(
                 "生成循环错误 | error_type=%s | error=%s",
@@ -395,14 +404,21 @@ async def generation_loop() -> None:
 
 @app.post("/control")
 async def control_generator(ctrl: GeneratorControl):
-    global is_generating
+    global is_generating, RESUME_INTERVAL, JOB_INTERVAL, FLUSH_INTERVAL
 
     if ctrl.action == "start":
         if is_generating:
             raise HTTPException(400, "生成器已在运行")
+        if ctrl.resume_interval_seconds is not None:
+            RESUME_INTERVAL = max(1.0, ctrl.resume_interval_seconds)
+        if ctrl.job_interval_seconds is not None:
+            JOB_INTERVAL = max(1.0, ctrl.job_interval_seconds)
+        if ctrl.flush_interval_seconds is not None:
+            FLUSH_INTERVAL = max(1.0, ctrl.flush_interval_seconds)
         is_generating = True
+        stats["started_at"] = time.time()
         asyncio.create_task(generation_loop())
-        return {"status": "started"}
+        return {"status": "started", "config": get_config()}
 
     if ctrl.action == "stop":
         if not is_generating:
@@ -414,15 +430,37 @@ async def control_generator(ctrl: GeneratorControl):
     raise HTTPException(400, "无效操作")
 
 
+def get_config() -> Dict:
+    return {
+        "resume_interval_seconds": RESUME_INTERVAL,
+        "job_interval_seconds": JOB_INTERVAL,
+        "flush_interval_seconds": FLUSH_INTERVAL,
+    }
+
+
 @app.get("/status")
 async def get_status():
+    elapsed_minutes = 0
+    if stats.get("started_at"):
+        elapsed_minutes = max((time.time() - float(stats["started_at"])) / 60, 1 / 60)
     return {
+        "running": is_generating,
         "is_generating": is_generating,
         "stats": stats,
+        "total_resumes": stats["resumes"],
+        "total_jobs": stats["jobs"],
         "buffer_size": {
             "resumes": len(resume_buffer),
             "jobs": len(job_buffer),
         },
+        "last_flush_time": stats["last_flush"],
+        "generation_rate": {
+            "resumes_per_minute": round((stats["resumes"] + len(resume_buffer)) / elapsed_minutes, 2) if is_generating else 0,
+            "jobs_per_minute": round((stats["jobs"] + len(job_buffer)) / elapsed_minutes, 2) if is_generating else 0,
+        },
+        "recent_resumes": recent_resumes,
+        "recent_jobs": recent_jobs,
+        "config": get_config(),
     }
 
 
