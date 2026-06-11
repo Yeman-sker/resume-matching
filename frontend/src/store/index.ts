@@ -5,6 +5,7 @@ interface SystemStore {
   status: SystemStatus | null
   setStatus: (status: SystemStatus) => void
   ws: WebSocket | null
+  reconnectTimer: number | null
   connectWS: () => void
   disconnectWS: () => void
 }
@@ -12,11 +13,21 @@ interface SystemStore {
 export const useSystemStore = create<SystemStore>((set, get) => ({
   status: null,
   ws: null,
+  reconnectTimer: null,
 
   setStatus: (status) => set({ status }),
 
   connectWS: () => {
-    const ws = new WebSocket('ws://localhost:8002/ws')
+    const currentWS = get().ws
+    if (
+      currentWS?.readyState === WebSocket.OPEN ||
+      currentWS?.readyState === WebSocket.CONNECTING
+    ) {
+      return
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${protocol}//${window.location.hostname}:8002/ws`)
 
     ws.onopen = () => console.log('WebSocket connected')
     ws.onmessage = (event) => {
@@ -26,17 +37,22 @@ export const useSystemStore = create<SystemStore>((set, get) => ({
     ws.onerror = (error) => console.error('WebSocket error:', error)
     ws.onclose = () => {
       console.log('WebSocket disconnected')
-      setTimeout(() => get().connectWS(), 3000)
+      const reconnectTimer = window.setTimeout(() => get().connectWS(), 3000)
+      set({ ws: null, reconnectTimer })
     }
 
-    set({ ws })
+    set({ ws, reconnectTimer: null })
   },
 
   disconnectWS: () => {
-    const { ws } = get()
-    if (ws) {
-      ws.close()
-      set({ ws: null })
+    const { ws, reconnectTimer } = get()
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer)
     }
+    if (ws) {
+      ws.onclose = null
+      ws.close()
+    }
+    set({ ws: null, reconnectTimer: null })
   },
 }))
