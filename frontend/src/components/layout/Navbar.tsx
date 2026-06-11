@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Briefcase, UserSearch, Settings } from 'lucide-react'
+import { LayoutDashboard, Briefcase, UserSearch, Settings, Workflow } from 'lucide-react'
 
 const navItems = [
   { to: '/', label: '系统监控', icon: LayoutDashboard },
   { to: '/jobs', label: '岗位匹配', icon: Briefcase },
   { to: '/resumes', label: '简历推荐', icon: UserSearch },
   { to: '/generator', label: '生成器控制', icon: Settings },
+  { to: '/batch', label: '批处理控制', icon: Workflow },
 ]
 
 export default function Navbar() {

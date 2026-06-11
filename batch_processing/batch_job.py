@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime
 
 from pyspark.ml.feature import CountVectorizer, IDF, Word2Vec
@@ -36,6 +37,8 @@ RULE_WEIGHTS = {
     "certificate": 0.05,
 }
 TOTAL_WEIGHTS = {"semantic": 0.60, "rule": 0.40}
+# 数据不足跳过时的退出码，调度器据此区分「跳过」和「成功/失败」
+EXIT_CODE_SKIPPED = 3
 
 
 class InsufficientTrainingData(Exception):
@@ -327,8 +330,7 @@ def run_batch_job(spark):
     job_count = jobs_df.count()
     print(f"  简历数: {resume_count}, 岗位数: {job_count}")
     if resume_count == 0 or job_count == 0:
-        print("数据不足，跳过本次任务")
-        return
+        raise InsufficientTrainingData("简历或岗位数据为空")
 
     print("[2/6] 训练 TF-IDF 模型...")
     train_df = resumes_df.select("tokens").union(jobs_df.select("tokens"))
@@ -411,6 +413,7 @@ def main():
         run_batch_job(spark)
     except InsufficientTrainingData as error:
         print(f"训练数据不足，跳过本次任务：{error}")
+        sys.exit(EXIT_CODE_SKIPPED)
     finally:
         spark.stop()
 

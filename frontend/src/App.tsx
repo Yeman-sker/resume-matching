@@ -5,6 +5,7 @@ import JobMatchPage from '@/pages/JobMatchPage'
 import ResumeRecommendPage from '@/pages/ResumeRecommendPage'
 import MatchDetailPage from '@/pages/MatchDetailPage'
 import GeneratorControlPage from '@/pages/GeneratorControlPage'
+import BatchControlPage from '@/pages/BatchControlPage'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
             <Route path="/resumes" element={<ResumeRecommendPage />} />
             <Route path="/match/:resumeId/:jobId" element={<MatchDetailPage />} />
             <Route path="/generator" element={<GeneratorControlPage />} />
+            <Route path="/batch" element={<BatchControlPage />} />
           </Routes>
         </main>
       </div>

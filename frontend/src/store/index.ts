@@ -12,6 +12,7 @@ import type {
   ResumeRecommendationsResponse,
   GeneratorStatus,
   GeneratorConfig,
+  BatchStatus,
 } from '@/types'
 
 function getErrorMessage(err: unknown): string {
@@ -40,6 +41,10 @@ interface AppStore {
   fetchGeneratorStatus: () => Promise<GeneratorStatus>
   startGenerator: (config?: GeneratorConfig) => Promise<void>
   stopGenerator: () => Promise<void>
+  fetchBatchStatus: () => Promise<BatchStatus>
+  triggerBatch: () => Promise<void>
+  pauseBatchSchedule: () => Promise<void>
+  resumeBatchSchedule: () => Promise<void>
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -138,5 +143,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   stopGenerator: async () => {
     await api.post('/api/generator/stop')
+  },
+
+  fetchBatchStatus: async () => {
+    const res = await api.get<BatchStatus>('/api/batch/status')
+    return res.data
+  },
+
+  triggerBatch: async () => {
+    await api.post('/api/batch/trigger')
+  },
+
+  pauseBatchSchedule: async () => {
+    await api.post('/api/batch/schedule/pause')
+  },
+
+  resumeBatchSchedule: async () => {
+    await api.post('/api/batch/schedule/resume')
   },
 }))

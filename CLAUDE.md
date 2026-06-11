@@ -62,10 +62,10 @@ cd streaming
 bash streaming_supervisor.sh  # 自动重启监督脚本
 ```
 
-### 批处理调度器
+### 批处理调度器（端口 8001）
 ```bash
 cd batch_processing
-bash start.sh  # 通过 APScheduler 每 10 分钟运行一次
+bash start.sh  # APScheduler 每 10 分钟自动运行 + FastAPI 控制接口（手动触发/状态/暂停恢复）
 ```
 
 ### Web 后端（端口 8002）
@@ -122,7 +122,7 @@ bash scripts/reset_hdfs_schema.sh
 │   └── skill_alias.json     # 技能别名映射
 ├── batch_processing/        # 中游：批处理任务（模型训练+匹配计算）
 │   ├── batch_job.py         # 核心任务（TF-IDF、Word2Vec、评分计算）
-│   ├── batch_scheduler.py   # APScheduler 调度器（每 10 分钟）
+│   ├── batch_scheduler.py   # APScheduler 调度器 + FastAPI 控制接口（端口 8001）
 │   └── start.sh             # 启动脚本
 ├── web_backend/             # 下游：Web 后端服务（FastAPI + WebSocket）
 │   ├── main.py              # 后端主服务（系统监控）
@@ -204,7 +204,9 @@ hdfs://localhost:9000/resume_matching/
 - **Checkpoint**：保存在 HDFS `/resume_matching/checkpoints/streaming_*`
 
 ### 中游：批处理任务
-- **重量级模型训练和匹配计算**：通过 APScheduler 每 10 分钟自动触发
+- **重量级模型训练和匹配计算**：通过 APScheduler 每 10 分钟自动触发（服务启动时不立即运行）
+- **手动控制**（FastAPI，端口 8001）：`POST /trigger` 手动触发（运行中返回 409 互斥）、`GET /status` 状态查询（含上次运行结果/日志/下次自动运行时间）、`POST /schedule/pause|resume` 暂停/恢复自动调度；web_backend 以 `/api/batch/*` 代理，前端「批处理控制」页操作
+- **跳过语义**：数据不足时 `batch_job.py` 以退出码 3 退出，状态显示为「跳过」（区别于成功/失败）
 - **执行流程**：
   1. 读取 HDFS 清洗后的简历和岗位数据
   2. 使用 MLlib CountVectorizer + IDF 训练 TF-IDF 模型（vocabSize=500, minDF=2）

@@ -2,7 +2,7 @@
 
 ## 功能
 
-- 每 10 分钟自动运行一次（APScheduler）
+- 每 10 分钟自动运行一次（APScheduler），并在端口 8001 提供 FastAPI 控制接口
 - 训练 TF-IDF 和 Word2Vec 模型
 - 计算语义分数（TF-IDF 60% + Word2Vec 40%）
 - 计算规则分数（技能、学历、经验、城市、薪资、证书）
@@ -24,8 +24,11 @@ bash batch_processing/start.sh
 ```
 
 调度器会：
-1. 立即运行一次批处理任务
-2. 每 10 分钟自动触发一次
+1. 每 10 分钟自动触发一次批处理任务（启动时不立即运行）
+2. 在端口 8001 提供控制接口：
+   - `POST /trigger`：手动触发（任务运行中返回 409）
+   - `GET /status`：运行状态、上次运行结果与日志、下次自动运行时间
+   - `POST /schedule/pause` / `POST /schedule/resume`：暂停/恢复自动调度
 
 ### 手动运行单次任务
 
@@ -33,6 +36,8 @@ bash batch_processing/start.sh
 cd batch_processing
 spark-submit --master local[*] --driver-memory 4g batch_job.py
 ```
+
+数据不足时 `batch_job.py` 以退出码 3 退出，调度器据此将该次运行标记为「跳过」。
 
 默认使用 `hdfs://localhost:9000/resume_matching`；隔离验证时可通过 `HDFS_BASE` 覆盖。
 

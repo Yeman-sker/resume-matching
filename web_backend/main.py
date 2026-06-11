@@ -5,7 +5,7 @@ import asyncio
 import time
 from datetime import datetime
 
-from api import generator, stats, jobs, resumes, matches
+from api import generator, stats, jobs, resumes, matches, batch
 
 app = FastAPI(title="简历匹配系统 - Web 后端")
 
@@ -28,6 +28,7 @@ app.include_router(stats.router)
 app.include_router(jobs.router)
 app.include_router(resumes.router)
 app.include_router(matches.router)
+app.include_router(batch.router)
 
 COUNT_CACHE_TTL = 30
 count_cache = {"updated_at": 0.0, "values": (0, 0, 0)}

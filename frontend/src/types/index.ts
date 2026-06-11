@@ -163,3 +163,21 @@ export interface GeneratorConfig {
   job_interval_seconds: number
   flush_interval_seconds: number
 }
+
+export interface BatchRunRecord {
+  trigger: 'manual' | 'scheduled'
+  started_at: string
+  finished_at: string
+  duration_seconds: number
+  result: 'success' | 'failed' | 'skipped'
+  error: string
+}
+
+export interface BatchStatus {
+  running: boolean
+  current_run: { trigger: 'manual' | 'scheduled'; started_at: string } | null
+  last_run: BatchRunRecord | null
+  last_run_log: string
+  schedule_paused: boolean
+  next_scheduled_run: string | null
+}
