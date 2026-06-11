@@ -114,19 +114,19 @@
 | | JDK | OpenJDK | 11 |
 | **上游** | 数据生成器 | Python + FastAPI | 3.10+ |
 | | AI 接口 | OpenAI 兼容 API | - |
-| | HTTP 客户端 | openai-python | 最新 |
+| | HTTP 客户端 | httpx | 0.27+ |
 | **中游** | 流处理 | PySpark Structured Streaming | 3.5.1 |
 | | 批处理 | PySpark | 3.5.1 |
 | | 任务调度 | APScheduler | 3.10+ |
 | | 中文分词 | jieba | 0.42+ |
-| | 机器学习 | scikit-learn | 1.3+ |
+| | 机器学习 | scikit-learn | 1.4+ |
 | | 词向量 | gensim | 4.3+ |
-| **下游** | 前端框架 | React | 18+ |
+| **下游** | 前端框架 | React | 19+ |
 | | UI 组件库 | shadcn/ui (Radix UI + Tailwind CSS) | - |
-| | 状态管理 | Zustand | 4+ |
-| | HTTP 客户端 | axios | 1.6+ |
-| | 后端框架 | FastAPI | 0.100+ |
-| | 静态文件服务 | nginx 或 Python http.server | - |
+| | 状态管理 | Zustand | 5+ |
+| | HTTP 客户端 | axios | 1.7+ |
+| | 后端框架 | FastAPI | 0.115+ |
+| | 构建工具 | Vite | 8+ |
 
 ### 2.3 部署架构
 
@@ -141,11 +141,12 @@
 **服务端口分配**：
 ```
 8000  - 数据生成器 FastAPI 服务
-8001  - 批处理调度器 FastAPI 服务
-3000  - React 前端服务
+8002  - Web 后端 FastAPI 服务
+5173  - React 前端开发服务
 9000  - HDFS NameNode
 8080  - Spark Master Web UI
-4040  - Spark Application UI
+4040  - Spark Application UI (动态)
+9870  - HDFS Web UI (Hadoop 3.x)
 ```
 
 **HDFS 目录结构**：
@@ -497,20 +498,22 @@ done
 
 **调度配置**：
 ```python
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.blocking import BlockingScheduler
 
-scheduler = BackgroundScheduler()
+scheduler = BlockingScheduler()
 scheduler.add_job(
     run_batch_job,
     trigger='interval',
     minutes=10,
-    id='batch_processing',
-    replace_existing=True
+    id='batch_processing'
 )
 scheduler.start()
 ```
 
-**服务端口**：8001
+**调度说明**：
+- 使用 BlockingScheduler（阻塞模式）
+- 立即执行一次，然后每 10 分钟触发一次
+- 不提供 HTTP API 接口（通过日志监控）
 
 #### 4.2.3 模型训练
 
@@ -1243,15 +1246,25 @@ rule_score = (
 #### 7.3.3 总分计算
 
 ```python
-total_score = 0.60 * semantic_score + 0.40 * rule_score
+total_score = (
+    0.30 * skill_score +
+    0.30 * semantic_score +
+    0.15 * education_score +
+    0.10 * experience_score +
+    0.05 * city_score +
+    0.05 * salary_score +
+    0.05 * certificate_score
+)
 ```
 
 **权重设计依据**：
-- 语义分 60%：文本相似度是判断"能不能做"的核心指标
-- 规则分 40%：硬性条件（学历、经验、技能）是基本门槛
-- 技能占规则分 40%：技能点匹配是招聘的首要考虑因素
-- 学历占 20%：学历是重要但非唯一标准
-- 证书占 5%：证书是加分项，不是必需项
+- 技能分 30%：技能点匹配是招聘的首要考虑因素
+- 语义分 30%：文本相似度是判断"能不能做"的核心指标
+- 学历分 15%：学历是重要但非唯一标准
+- 经验分 10%：工作经验是能力的体现
+- 城市分 5%：地理位置影响相对较小
+- 薪资分 5%：薪资可协商
+- 证书分 5%：证书是加分项，不是必需项
 
 #### 7.3.4 推荐理由生成
 
@@ -1459,17 +1472,17 @@ echo $! > $LOG_DIR/batch.pid
 
 # 4. 启动前端服务
 echo "[4/4] Starting frontend..."
-cd $PROJECT_ROOT/frontend/build
-nohup python3 -m http.server 3000 > $LOG_DIR/frontend.log 2>&1 &
+cd $PROJECT_ROOT/frontend
+nohup npm run dev > $LOG_DIR/frontend.log 2>&1 &
 echo $! > $LOG_DIR/frontend.pid
 
 echo "All services started."
 echo "View logs in $LOG_DIR"
 echo ""
 echo "Access URLs:"
-echo "  - Frontend:         http://$(hostname -I | awk '{print $1}'):3000"
+echo "  - Frontend:         http://$(hostname -I | awk '{print $1}'):5173"
 echo "  - Generator API:    http://$(hostname -I | awk '{print $1}'):8000"
-echo "  - Batch API:        http://$(hostname -I | awk '{print $1}'):8001"
+echo "  - Web Backend API:  http://$(hostname -I | awk '{print $1}'):8002"
 echo "  - Spark Master UI:  http://$(hostname -I | awk '{print $1}'):8080"
 ```
 
@@ -1522,14 +1535,14 @@ echo "All services stopped."
 **防火墙配置**（如果启用了 ufw）：
 ```bash
 sudo ufw allow 8000/tcp
-sudo ufw allow 8001/tcp
-sudo ufw allow 3000/tcp
+sudo ufw allow 8002/tcp
+sudo ufw allow 5173/tcp
 sudo ufw allow 8080/tcp
 sudo ufw allow 9870/tcp
 ```
 
 **访问方式**：
-- 从宿主机浏览器访问：`http://虚拟机IP:3000`
+- 从宿主机浏览器访问：`http://虚拟机IP:5173`
 - 确保虚拟机网络模式为桥接或 NAT，并配置端口转发（如使用 VirtualBox/VMware）
 
 ---
