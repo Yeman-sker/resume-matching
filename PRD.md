@@ -119,8 +119,7 @@
 | | 批处理 | PySpark | 3.5.1 |
 | | 任务调度 | APScheduler | 3.10+ |
 | | 中文分词 | jieba | 0.42+ |
-| | 机器学习 | scikit-learn | 1.4+ |
-| | 词向量 | gensim | 4.3+ |
+| | 机器学习与词向量 | Spark MLlib | 3.5.1 |
 | **下游** | 前端框架 | React | 19+ |
 | | UI 组件库 | shadcn/ui (Radix UI + Tailwind CSS) | - |
 | | 状态管理 | Zustand | 5+ |
@@ -164,14 +163,12 @@ hdfs://localhost:9000/resume_matching
 │   ├── resumes/
 │   └── jobs/
 ├── models/                       # 训练的模型文件
+│   ├── count_vectorizer/
+│   │   └── cv_v{version}/
 │   ├── tfidf/
-│   │   ├── vectorizer_v1.pkl
-│   │   ├── resume_matrix_v1.pkl
-│   │   └── job_matrix_v1.pkl
+│   │   └── tfidf_v{version}/
 │   └── word2vec/
-│       ├── model_v1.bin
-│       ├── resume_vectors_v1.pkl
-│       └── job_vectors_v1.pkl
+│       └── w2v_v{version}/
 ├── output/                       # 最终匹配结果
 │   └── matches/
 │       └── match_results.csv
@@ -517,51 +514,46 @@ scheduler.start()
 
 #### 4.2.3 模型训练
 
-**TF-IDF 训练**（参考 `workflow/07_train_tfidf/`）：
+**TF-IDF 训练**：
 ```python
-from sklearn.feature_extraction.text import TfidfVectorizer
+from pyspark.ml.feature import CountVectorizer, IDF
 
-# 读取全量数据
-resumes = spark.read.csv("hdfs://resume_matching/processed/resumes/**/*.csv", header=True)
-jobs = spark.read.csv("hdfs://resume_matching/processed/jobs/**/*.csv", header=True)
+train_df = resumes.select("tokens").union(jobs.select("tokens"))
+train_df = train_df.filter(size(col("tokens")) > 0)
 
-# 合并所有文本作为语料库
-corpus = resumes.select("clean_text").union(jobs.select("clean_text"))
-
-# 训练 TF-IDF
-vectorizer = TfidfVectorizer(max_features=5000)
-vectorizer.fit(corpus)
-
-# 生成向量矩阵
-resume_tfidf = vectorizer.transform(resumes["clean_text"])
-job_tfidf = vectorizer.transform(jobs["clean_text"])
+cv = CountVectorizer(
+    inputCol="tokens",
+    outputCol="raw_features",
+    vocabSize=500,
+    minDF=2,
+)
+cv_model = cv.fit(train_df)
+idf_model = IDF(
+    inputCol="raw_features",
+    outputCol="tfidf_features",
+).fit(cv_model.transform(train_df))
 
 # 保存模型
-save_to_hdfs(vectorizer, "hdfs://resume_matching/models/tfidf/vectorizer_v{version}.pkl")
-save_to_hdfs(resume_tfidf, "hdfs://resume_matching/models/tfidf/resume_matrix_v{version}.pkl")
-save_to_hdfs(job_tfidf, "hdfs://resume_matching/models/tfidf/job_matrix_v{version}.pkl")
+cv_model.save("hdfs://resume_matching/models/count_vectorizer/cv_v{version}")
+idf_model.save("hdfs://resume_matching/models/tfidf/tfidf_v{version}")
 ```
 
-**Word2Vec 训练**（参考 `workflow/08_train_word2vec/`）：
+**Word2Vec 训练**：
 ```python
-from gensim.models import Word2Vec
+from pyspark.ml.feature import Word2Vec
 
-# 训练 Word2Vec
-sentences = [row["tokens"].split() for row in resumes.collect() + jobs.collect()]
-w2v_model = Word2Vec(sentences, vector_size=100, window=5, min_count=2, workers=4)
-
-# 生成文档向量（词向量平均）
-def doc_vector(tokens, model):
-    vectors = [model.wv[word] for word in tokens if word in model.wv]
-    return np.mean(vectors, axis=0) if vectors else np.zeros(100)
-
-resume_w2v = np.array([doc_vector(tokens, w2v_model) for tokens in resumes["tokens"]])
-job_w2v = np.array([doc_vector(tokens, w2v_model) for tokens in jobs["tokens"]])
+w2v_model = Word2Vec(
+    inputCol="tokens",
+    outputCol="w2v_vector",
+    vectorSize=100,
+    windowSize=5,
+    minCount=1,
+    maxIter=30,
+    seed=42,
+).fit(train_df)
 
 # 保存模型
-w2v_model.save(f"hdfs://resume_matching/models/word2vec/model_v{version}.bin")
-save_to_hdfs(resume_w2v, f"hdfs://resume_matching/models/word2vec/resume_vectors_v{version}.pkl")
-save_to_hdfs(job_w2v, f"hdfs://resume_matching/models/word2vec/job_vectors_v{version}.pkl")
+w2v_model.save("hdfs://resume_matching/models/word2vec/w2v_v{version}")
 ```
 
 #### 4.2.4 匹配计算
@@ -1054,8 +1046,8 @@ GET /api/matches/{resume_id}/{job_id}
 | certificate_score | float | 证书加分（0-100） |
 | rule_score | float | 规则分（0-100） |
 | total_score | float | 总分（0-100） |
-| matched_skills | json | 已匹配的技能列表 |
-| missing_skills | json | 缺失的技能列表 |
+| matched_skills | string | 已匹配的技能，管道符 `|` 分隔 |
+| missing_skills | string | 缺失的技能，管道符 `|` 分隔 |
 | reason | string | 推荐理由文本 |
 
 ### 6.3 停用词表和技能标准化表
@@ -1153,16 +1145,14 @@ required = set(job["required_skills_standard"])
 preferred = set(job["preferred_skills_standard"])
 candidate = set(resume["standard_skills"])
 
-# 必备技能匹配率
-required_match_rate = len(candidate & required) / len(required) if required else 1.0
+if required:
+    required_score = len(candidate & required) / len(required) * 85
+    preferred_bonus = min(len(candidate & preferred) * 5, 15)
+    skill_score = min(required_score + preferred_bonus, 100)
+else:
+    skill_score = 60
 
-# 加分技能匹配数
-preferred_match_count = len(candidate & preferred)
-
-# 技能分 = 必备技能权重 80% + 加分技能权重 20%
-skill_score = required_match_rate * 80 + min(preferred_match_count / max(len(preferred), 1), 1.0) * 20
-
-matched_skills = list(candidate & (required | preferred))
+matched_skills = list(candidate & required)
 missing_skills = list(required - candidate)
 ```
 
@@ -1174,9 +1164,9 @@ job_edu_level = job["education_required_level"]
 if resume_edu_level >= job_edu_level:
     education_score = 100
 elif resume_edu_level == job_edu_level - 1:
-    education_score = 70  # 差一级，扣 30 分
+    education_score = 60
 else:
-    education_score = 0   # 差两级以上，不匹配
+    education_score = 30
 ```
 
 **经验匹配分（15% 权重）**：
@@ -1185,50 +1175,46 @@ resume_exp = resume["experience_years_num"]
 job_exp = job["experience_required_num"]
 
 if resume_exp >= job_exp:
-    # 经验足够，满分
     experience_score = 100
-elif resume_exp >= job_exp * 0.5:
-    # 经验不足但超过一半，按比例计分
-    experience_score = (resume_exp / job_exp) * 100
+elif job_exp - resume_exp == 1:
+    experience_score = 70
+elif job_exp - resume_exp == 2:
+    experience_score = 40
 else:
-    # 经验严重不足
-    experience_score = 50
+    experience_score = 20
 ```
 
 **城市匹配分（10% 权重）**：
 ```python
-if resume["standard_location"] == job["standard_location"]:
+resume_city = resume["standard_location"]
+job_city = job["standard_location"]
+
+if resume_city == "未知" or job_city == "未知":
+    city_score = 60
+elif resume_city == job_city:
     city_score = 100
 else:
-    city_score = 0
+    city_score = 50
 ```
 
 **薪资匹配分（10% 权重）**：
 ```python
 expected = resume["expected_salary"]
-min_salary = job["salary_min"]
 max_salary = job["salary_max"]
 
-if min_salary <= expected <= max_salary:
-    # 期望在范围内，满分
+if expected <= 0 or max_salary <= 0:
+    salary_score = 60
+elif max_salary >= expected:
     salary_score = 100
-elif expected < min_salary:
-    # 期望低于范围，按差距扣分
-    gap = (min_salary - expected) / min_salary
-    salary_score = max(100 - gap * 50, 50)
+elif max_salary / expected >= 0.8:
+    salary_score = 70
 else:
-    # 期望高于范围，按差距扣分
-    gap = (expected - max_salary) / max_salary
-    salary_score = max(100 - gap * 100, 0)
+    salary_score = 40
 ```
 
 **证书加分（5% 权重）**：
 ```python
-# 简单策略：有证书就加分
-if resume["certifications"] and resume["certifications"] != "无":
-    certificate_score = 100
-else:
-    certificate_score = 0
+certificate_score = 100 if resume["certification_items"] else 60
 ```
 
 **规则分加权平均**：
@@ -1247,24 +1233,14 @@ rule_score = (
 
 ```python
 total_score = (
-    0.30 * skill_score +
-    0.30 * semantic_score +
-    0.15 * education_score +
-    0.10 * experience_score +
-    0.05 * city_score +
-    0.05 * salary_score +
-    0.05 * certificate_score
+    0.60 * semantic_score +
+    0.40 * rule_score
 )
 ```
 
 **权重设计依据**：
-- 技能分 30%：技能点匹配是招聘的首要考虑因素
-- 语义分 30%：文本相似度是判断"能不能做"的核心指标
-- 学历分 15%：学历是重要但非唯一标准
-- 经验分 10%：工作经验是能力的体现
-- 城市分 5%：地理位置影响相对较小
-- 薪资分 5%：薪资可协商
-- 证书分 5%：证书是加分项，不是必需项
+- 语义分 60%：突出 TF-IDF 和 Word2Vec 的文本匹配能力
+- 规则分 40%：保留技能、学历、经验、城市、薪资和证书等硬性条件
 
 #### 7.3.4 推荐理由生成
 
@@ -1367,8 +1343,8 @@ spark-shell --version
 sudo apt install python3.10 python3-pip -y
 
 # 安装依赖
-pip3 install fastapi uvicorn pandas numpy scikit-learn gensim jieba \
-    apscheduler pyspark openai websockets
+pip3 install fastapi uvicorn httpx pydantic python-dotenv websockets \
+    pyspark numpy jieba apscheduler
 ```
 
 **5. 前端环境**：

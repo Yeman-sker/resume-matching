@@ -75,8 +75,9 @@
 
 **计算公式：**
 ```
-总分 = 技能分 × 30% + 语义分 × 30% + 学历分 × 15% + 经验分 × 10% 
-     + 城市分 × 5% + 薪资分 × 5% + 证书分 × 5%
+总分 = 语义分 × 60% + 规则分 × 40%
+规则分 = 技能分 × 40% + 学历分 × 20% + 经验分 × 15%
+       + 城市分 × 10% + 薪资分 × 10% + 证书分 × 5%
 ```
 
 ## 数据字段
@@ -99,7 +100,7 @@
 一条匹配记录包含以下字段：
 - **标识字段**：resume_id, resume_name, job_id, job_title, department
 - **语义分数**：tfidf_score, word2vec_score, semantic_score
-- **规则分数**：skill_score, education_score, experience_score, city_score, salary_score, certificate_score
+- **规则分数**：skill_score, education_score, experience_score, city_score, salary_score, certificate_score, rule_score
 - **总分**：total_score
 - **技能详情**：matched_skills（共同技能），missing_skills（缺失技能）
 - **推荐理由**：reason（综合描述各维度的匹配情况）

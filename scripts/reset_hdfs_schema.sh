@@ -30,6 +30,7 @@ hdfs dfs -mkdir -p "$ROOT/output/matches"
 hdfs dfs -mkdir -p "$ROOT/checkpoints/streaming_resumes"
 hdfs dfs -mkdir -p "$ROOT/checkpoints/streaming_jobs"
 hdfs dfs -mkdir -p "$ROOT/resources"
+hdfs dfs -mkdir -p "$ROOT/models/count_vectorizer"
 hdfs dfs -mkdir -p "$ROOT/models/tfidf"
 hdfs dfs -mkdir -p "$ROOT/models/word2vec"
 

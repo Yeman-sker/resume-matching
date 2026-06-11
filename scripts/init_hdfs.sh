@@ -12,6 +12,7 @@ hdfs dfs -mkdir -p /resume_matching/processed/resumes
 hdfs dfs -mkdir -p /resume_matching/processed/jobs
 
 # 创建模型目录
+hdfs dfs -mkdir -p /resume_matching/models/count_vectorizer
 hdfs dfs -mkdir -p /resume_matching/models/tfidf
 hdfs dfs -mkdir -p /resume_matching/models/word2vec
 

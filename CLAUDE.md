@@ -31,9 +31,9 @@ Only offer to create an ADR when all three are true:
 
 **Python 环境**（统一虚拟环境 `.venv`）：
 - Python 3.10+
-- 依赖：fastapi、uvicorn、httpx、pyspark、jieba、numpy、scikit-learn、gensim、apscheduler
+- 依赖：fastapi、uvicorn、httpx、pyspark、numpy、jieba、apscheduler
 - 上游：FastAPI + OpenAI 兼容 API（通过环境变量配置）
-- 中游：PySpark 3.5.1 + jieba + scikit-learn + gensim
+- 中游：PySpark 3.5.1（Spark MLlib）+ jieba
 - 下游：FastAPI + WebSocket
 
 **前端**：
@@ -153,6 +153,7 @@ hdfs://localhost:9000/resume_matching/
 │   ├── resumes/*.csv
 │   └── jobs/*.csv
 ├── models/                  # 训练的模型文件
+│   ├── count_vectorizer/
 │   ├── tfidf/
 │   └── word2vec/
 ├── output/                  # 最终匹配结果
@@ -206,13 +207,13 @@ hdfs://localhost:9000/resume_matching/
 - **重量级模型训练和匹配计算**：通过 APScheduler 每 10 分钟自动触发
 - **执行流程**：
   1. 读取 HDFS 清洗后的简历和岗位数据
-  2. 训练 TF-IDF 模型（max_features=500）
-  3. 训练 Word2Vec 模型（vector_size=100, window=5, epochs=30）
+  2. 使用 MLlib CountVectorizer + IDF 训练 TF-IDF 模型（vocabSize=500, minDF=2）
+  3. 使用 MLlib 训练 Word2Vec 模型（vectorSize=100, windowSize=5, maxIter=30）
   4. 计算语义分（TF-IDF 60% + Word2Vec 40%）
   5. 计算规则分（技能、学历、经验、城市、薪资、证书）
   6. 生成简历×岗位笛卡尔积匹配结果
   7. 保存匹配结果和模型到 HDFS
-- **模型版本管理**：模型文件名带时间戳（如 `tfidf_v202406111530.pkl`）
+- **模型版本管理**：MLlib 模型目录名带时间戳（如 `tfidf_v202606112315/`）
 - **输出**：匹配结果保存到 HDFS `/resume_matching/output/matches`
 
 ### 下游：Web 展示
@@ -230,7 +231,8 @@ hdfs://localhost:9000/resume_matching/
 
 ### 总分计算公式
 ```
-总分 = 技能分×0.30 + 语义分×0.30 + 学历分×0.15 + 经验分×0.10 + 城市分×0.05 + 薪资分×0.05 + 证书分×0.05
+总分 = 语义分×0.60 + 规则分×0.40
+规则分 = 技能分×0.40 + 学历分×0.20 + 经验分×0.15 + 城市分×0.10 + 薪资分×0.10 + 证书分×0.05
 ```
 
 ### 语义分计算
@@ -276,7 +278,7 @@ hdfs://localhost:9000/resume_matching/
 2. **Streaming 任务重启策略**：每 10 分钟（600秒）自动退出，外层 `streaming_supervisor.sh` 自动重启，从 checkpoint 恢复
 3. **批处理调度**：APScheduler 每 10 分钟触发一次，训练模型 + 计算匹配分
 4. **数据流向**：单向流动（上游→中游→下游），不回流
-5. **模型版本管理**：模型文件名带时间戳版本号（如 `tfidf_v202406111530.pkl`）
+5. **模型版本管理**：MLlib 模型目录名带时间戳版本号（如 `tfidf_v202606112315/`）
 6. **文件命名**：HDFS 中的 CSV 文件名格式为 `YYYY-MM-DD_HH-MM-SS_<random>.csv`
 7. **Checkpoint 清理**：修改 Streaming 代码后必须清理对应的 checkpoint 目录，否则会使用旧的执行计划
 8. **技能字段格式**：使用管道符 `|` 分隔（不是逗号），例如 `Python|SQL|Spark`

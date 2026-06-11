@@ -54,7 +54,7 @@ curl -X POST http://localhost:8000/control -H "Content-Type: application/json" -
 
 - Hadoop HDFS 3.3.6（伪分布式）
 - Apache Spark 3.5.1（Standalone）
-- Python 3.10+ (FastAPI, PySpark, jieba, scikit-learn, gensim)
+- Python 3.10+（FastAPI、PySpark MLlib、NumPy、jieba）
 - React 19 + shadcn/ui + Zustand + Vite
 
 ## 核心功能

@@ -50,7 +50,7 @@ for resume in resumes:
 from pyspark.ml.feature import CountVectorizer, IDF
 
 # 构建词表（最多 500 词，至少在 2 个文档出现）
-cv = CountVectorizer(inputCol="tokens", outputCol="raw_features", 
+cv = CountVectorizer(inputCol="tokens", outputCol="raw_features",
                      vocabSize=500, minDF=2)
 cv_model = cv.fit(train_df)
 
@@ -70,7 +70,7 @@ idf_model = idf.fit(cv_model.transform(train_df))
 from pyspark.ml.feature import Word2Vec
 
 w2v = Word2Vec(inputCol="tokens", outputCol="w2v_vector",
-               vectorSize=100, windowSize=5, minCount=1, 
+               vectorSize=100, windowSize=5, minCount=1,
                maxIter=30, seed=42)
 w2v_model = w2v.fit(train_df)
 ```
@@ -109,12 +109,16 @@ matches = matches.withColumn("w2v_sim", cosine_sim_udf(...))
 
 # 计算所有维度分数（主 UDF）
 @udf(returnType=score_schema)
-def calc_all_scores(resume_struct, job_struct, tfidf_sim, w2v_sim):
+def calc_all_scores(resume_struct, job_struct, tfidf_score, word2vec_score):
     # 语义分
-    semantic_score = (tfidf_sim * 0.6 + w2v_sim * 0.4) * 100
+    semantic_score = tfidf_score * 0.6 + word2vec_score * 0.4
     # 规则分（技能、学历、经验等）
-    skill_score = score_skill(...)
-    # ... 其他维度
+    rule_score = (
+        skill_score * 0.40 + education_score * 0.20
+        + experience_score * 0.15 + city_score * 0.10
+        + salary_score * 0.10 + certificate_score * 0.05
+    )
+    total_score = semantic_score * 0.60 + rule_score * 0.40
     return {...}
 
 matches = matches.withColumn("scores", calc_all_scores(...))
@@ -142,9 +146,11 @@ df = df.withColumn(
 )
 ```
 
-**空值处理策略：**
+**空值和小语料处理策略：**
 - **训练时**：过滤掉 tokens 为空的记录（`filter(size(col("tokens")) > 0)`）
-- **匹配时**：保留所有记录，空向量的相似度返回 0，依靠其他维度评分
+- **匹配时**：保留所有记录，将空 tokens 规范化为 `[]`，由 Word2Vec 生成零向量
+- **空词表**：若没有词汇满足 `minDF=2`，跳过本轮任务并记录原因，避免 `IDF.fit()` 失败
+- **UDF Struct**：构造 `resume`/`job` Struct 时恢复原字段名，避免重命名前缀泄漏到 UDF
 
 **5. 模型保存**
 
@@ -198,7 +204,8 @@ w2v_model = Word2VecModel.load(path)
 1. 实现余弦相似度 UDF
 2. 实现主评分 UDF（7 个维度 + matched_skills + missing_skills + reason）
 3. 用 crossJoin + UDF 替换 Python 双层循环
-4. 验证匹配结果与原实现一致
+4. 输出 `rule_score`，按“语义分 60% + 规则分 40%”计算总分
+5. 验证匹配结果与原实现一致
 
 ### 阶段 3：性能测试和优化
 
@@ -226,6 +233,6 @@ MLlib 的 CountVectorizer 和 Word2Vec 也不支持增量训练（需要全量 f
 
 ---
 
-**日期**：2026-06-11  
-**作者**：Claude Code（教学项目）  
+**日期**：2026-06-11
+**作者**：Claude Code（教学项目）
 **审核者**：待定
