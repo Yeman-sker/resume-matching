@@ -10,17 +10,14 @@
 ## 安装
 
 ```bash
-cd data_generator
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+bash scripts/setup_python_env.sh
 ```
 
 ## 配置
 
 1. 复制环境变量模板：
 ```bash
-cp .env.example .env
+cp data_generator/.env.example data_generator/.env
 ```
 
 2. 编辑 `.env` 文件，填入你的 API Key：
@@ -37,10 +34,10 @@ FLUSH_INTERVAL=60
 
 ```bash
 # 方式1：直接运行
-python3 data_generator.py
+.venv/bin/python data_generator/data_generator.py
 
 # 方式2：使用启动脚本
-bash start.sh
+bash data_generator/start.sh
 ```
 
 ## API 接口

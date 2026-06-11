@@ -11,8 +11,7 @@
 ## 安装
 
 ```bash
-cd batch_processing
-pip3 install -r requirements.txt
+bash scripts/setup_python_env.sh
 ```
 
 ## 运行
@@ -20,7 +19,7 @@ pip3 install -r requirements.txt
 ### 启动调度器
 
 ```bash
-python3 batch_scheduler.py
+bash batch_processing/start.sh
 ```
 
 调度器会：
@@ -30,7 +29,9 @@ python3 batch_scheduler.py
 ### 手动运行单次任务
 
 ```bash
-spark-submit --master local[*] --driver-memory 4g batch_job.py
+export PYSPARK_DRIVER_PYTHON="$PWD/.venv/bin/python"
+export PYSPARK_PYTHON="$PWD/.venv/bin/python"
+spark-submit --master local[*] --driver-memory 4g batch_processing/batch_job.py
 ```
 
 ## 匹配算法

@@ -2,6 +2,11 @@
 
 cd "$(dirname "$0")/.."
 
+if [ ! -x ".venv/bin/python" ]; then
+    echo "错误：未找到统一 Python 环境，请先运行 scripts/setup_python_env.sh"
+    exit 1
+fi
+
 echo "=== 启动简历匹配系统 ==="
 echo ""
 

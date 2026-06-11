@@ -11,15 +11,14 @@
 ## 安装
 
 ```bash
-cd streaming
-pip3 install -r requirements.txt
+bash scripts/setup_python_env.sh
 ```
 
 ## 上传资源到 HDFS
 
 ```bash
-hdfs dfs -put stopwords.json hdfs://localhost:9000/resume_matching/resources/
-hdfs dfs -put skill_alias.json hdfs://localhost:9000/resume_matching/resources/
+hdfs dfs -put streaming/stopwords.json hdfs://localhost:9000/resume_matching/resources/
+hdfs dfs -put streaming/skill_alias.json hdfs://localhost:9000/resume_matching/resources/
 ```
 
 ## 运行
@@ -27,7 +26,7 @@ hdfs dfs -put skill_alias.json hdfs://localhost:9000/resume_matching/resources/
 ### 方式 1：监督脚本（推荐）
 
 ```bash
-bash streaming_supervisor.sh
+bash streaming/streaming_supervisor.sh
 ```
 
 监督脚本会自动：
@@ -39,11 +38,14 @@ bash streaming_supervisor.sh
 ### 方式 2：手动启动单个任务
 
 ```bash
+export PYSPARK_DRIVER_PYTHON="$PWD/.venv/bin/python"
+export PYSPARK_PYTHON="$PWD/.venv/bin/python"
+
 # 简历清洗
-spark-submit --master local[*] streaming_resumes.py
+spark-submit --master local[*] streaming/streaming_resumes.py
 
 # 岗位清洗
-spark-submit --master local[*] streaming_jobs.py
+spark-submit --master local[*] streaming/streaming_jobs.py
 ```
 
 ## 停止

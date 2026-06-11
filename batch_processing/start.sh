@@ -1,11 +1,14 @@
 #!/bin/bash
 cd "$(dirname "$0")"
+PROJECT_DIR="$(cd .. && pwd)"
+PYTHON="$PROJECT_DIR/.venv/bin/python"
 
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
+if [ ! -x "$PYTHON" ]; then
+    echo "错误：未找到统一 Python 环境，请先运行 scripts/setup_python_env.sh"
+    exit 1
 fi
 
-source venv/bin/activate
-pip install -q -r requirements.txt
+export PYSPARK_DRIVER_PYTHON="$PYTHON"
+export PYSPARK_PYTHON="$PYTHON"
 
-python3 batch_scheduler.py
+exec "$PYTHON" batch_scheduler.py
