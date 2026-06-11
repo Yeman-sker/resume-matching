@@ -5,25 +5,23 @@ import type { Match } from '@/types'
 import MatchCard from '@/components/match/MatchCard'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import EmptyState from '@/components/common/EmptyState'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Users, Search } from 'lucide-react'
 
 const LIMIT_OPTIONS = [10, 20, 50]
 
 export default function ResumeRecommendPage() {
-  const { resumes, loading, error, fetchResumes, fetchResumeRecommendations } = useAppStore()
+  const { resumes, fetchResumes, fetchResumeRecommendations } = useAppStore()
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedResumeId = searchParams.get('resumeId') || ''
   const [matches, setMatches] = useState<Match[]>([])
   const [totalMatches, setTotalMatches] = useState(0)
+  const [selectedResume, setSelectedResume] = useState<typeof resumes[0] | null>(null)
   const [search, setSearch] = useState('')
-  const [limit, setLimit] = useState(10)
+  const [limit, setLimit] = useState(20)
   const [matchesLoading, setMatchesLoading] = useState(false)
-  const [matchesError, setMatchesError] = useState<string | null>(null)
 
-  const refreshResumes = useCallback(() => {
-    void fetchResumes()
-  }, [fetchResumes])
+  const refreshResumes = useCallback(() => { void fetchResumes() }, [fetchResumes])
 
   useEffect(() => {
     refreshResumes()
@@ -32,94 +30,101 @@ export default function ResumeRecommendPage() {
   }, [refreshResumes])
 
   const filteredResumes = useMemo(
-    () => resumes.filter((resume) => {
-      const keyword = search.toLowerCase()
-      return !keyword || resume.name.toLowerCase().includes(keyword) || resume.resume_id.toLowerCase().includes(keyword)
+    () => resumes.filter((r) => {
+      if (!search) return true
+      return r.name.toLowerCase().includes(search.toLowerCase()) || r.resume_id.toLowerCase().includes(search.toLowerCase())
     }),
     [resumes, search],
   )
 
-  const selectedResume = useMemo(
-    () => resumes.find((resume) => resume.resume_id === selectedResumeId) ?? null,
-    [resumes, selectedResumeId],
-  )
-
-  const loadRecommendations = useCallback(async () => {
-    if (!selectedResumeId) {
-      setMatches([])
-      setTotalMatches(0)
-      return
-    }
-    setMatchesLoading(true)
-    setMatchesError(null)
-    try {
-      const res = await fetchResumeRecommendations(selectedResumeId, limit)
-      setMatches(res.matches)
-      setTotalMatches(res.total_matches)
-    } catch (err) {
-      setMatches([])
-      setTotalMatches(0)
-      setMatchesError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setMatchesLoading(false)
-    }
-  }, [fetchResumeRecommendations, limit, selectedResumeId])
-
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadRecommendations(), 0)
-    return () => window.clearTimeout(timer)
-  }, [loadRecommendations])
+    if (selectedResumeId && resumes.length > 0) {
+      const r = resumes.find((r) => r.resume_id === selectedResumeId)
+      if (r) setSelectedResume(r)
+      setMatchesLoading(true)
+      fetchResumeRecommendations(selectedResumeId, limit).then((res) => {
+        setMatches(res.matches); setTotalMatches(res.total_matches)
+      }).catch(() => { setMatches([]); setTotalMatches(0) }).finally(() => setMatchesLoading(false))
+    }
+  }, [selectedResumeId, resumes, limit])
+
+  const handleSelectResume = (resumeId: string) => setSearchParams({ resumeId })
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-6 md:flex-row">
-      <div className="shrink-0 space-y-3 md:w-[320px]">
-        <Input placeholder="搜索姓名..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <div className="border rounded-lg overflow-auto max-h-[calc(100vh-14rem)]">
-          {loading ? <LoadingSpinner /> : filteredResumes.length === 0 ? (
-            <EmptyState message={error || '暂无简历数据，请确保中游数据处理服务正在运行'} />
-          ) : filteredResumes.map((resume) => (
-            <div
-              key={resume.resume_id}
-              onClick={() => setSearchParams({ resumeId: resume.resume_id })}
-              className={`px-3 py-2.5 cursor-pointer border-b last:border-b-0 hover:bg-accent transition-colors ${selectedResumeId === resume.resume_id ? 'bg-accent' : ''}`}
-            >
-              <div className="font-medium text-sm">{resume.name}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{resume.resume_id} · {resume.education} · {resume.experience_years_num}年经验</div>
-              {resume.standard_skills && <div className="text-xs text-muted-foreground mt-0.5 truncate">{resume.standard_skills.replace(/\|/g, '、')}</div>}
-            </div>
-          ))}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Users className="h-5 w-5" style={{ color: 'var(--accent)' }} />
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--foreground)' }}>简历推荐查询</h1>
+          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>选择简历，查看最推荐的岗位</p>
         </div>
       </div>
 
-      <div className="flex-1 space-y-4">
-        {selectedResume ? (
-          <>
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-lg">{selectedResume.name}</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid gap-2 text-sm md:grid-cols-4">
-                  <div><span className="text-muted-foreground">学历:</span> {selectedResume.education}</div>
-                  <div><span className="text-muted-foreground">经验:</span> {selectedResume.experience_years_num}年</div>
-                  <div><span className="text-muted-foreground">城市:</span> {selectedResume.standard_location || selectedResume.location}</div>
-                  <div><span className="text-muted-foreground">期望薪资:</span> {selectedResume.expected_salary}万/年</div>
+      <div className="flex min-h-[calc(100vh-12rem)] gap-6">
+        <div className="shrink-0 w-[320px] space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            <Input placeholder="搜索姓名..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <div className="rounded-sm overflow-auto max-h-[calc(100vh-16rem)]" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+            {filteredResumes.length === 0 ? (
+              <EmptyState message="暂无简历数据" />
+            ) : filteredResumes.map((resume) => (
+              <div
+                key={resume.resume_id}
+                onClick={() => handleSelectResume(resume.resume_id)}
+                className="px-3 py-2.5 cursor-pointer transition-colors"
+                style={{
+                  borderBottom: '1px solid var(--border)',
+                  background: selectedResumeId === resume.resume_id ? 'var(--secondary)' : 'transparent',
+                  borderLeft: selectedResumeId === resume.resume_id ? '2px solid var(--accent)' : '2px solid transparent',
+                }}
+                onMouseEnter={(e) => { if (selectedResumeId !== resume.resume_id) e.currentTarget.style.background = 'var(--warm-card-hover)' }}
+                onMouseLeave={(e) => { if (selectedResumeId !== resume.resume_id) e.currentTarget.style.background = 'transparent' }}
+              >
+                <div className="font-medium text-sm" style={{ color: 'var(--foreground)' }}>{resume.name}</div>
+                <div className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+                  {resume.resume_id} · {resume.education} · {resume.experience_years_num}年经验
                 </div>
-                <div className="mt-1 text-sm"><span className="text-muted-foreground">技能:</span> {selectedResume.standard_skills || selectedResume.skills}</div>
-                <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
+                {resume.skill_items_raw && (
+                  <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--muted-foreground)' }}>
+                    {resume.skill_items_raw.replace(/\|/g, '、')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-4">
+          {selectedResume ? (
+            <>
+              <div className="p-4 space-y-2" style={{ background: 'var(--card)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                <h3 className="font-semibold" style={{ color: 'var(--foreground)' }}>{selectedResume.name}</h3>
+                <div className="grid gap-1.5 text-sm md:grid-cols-4">
+                  <div><span style={{ color: 'var(--muted-foreground)' }}>学历:</span> <span style={{ color: 'var(--foreground)' }}>{selectedResume.education}</span></div>
+                  <div><span style={{ color: 'var(--muted-foreground)' }}>经验:</span> <span style={{ color: 'var(--foreground)' }}>{selectedResume.experience_years_num}年</span></div>
+                  <div><span style={{ color: 'var(--muted-foreground)' }}>城市:</span> <span style={{ color: 'var(--foreground)' }}>{selectedResume.standard_location || selectedResume.location}</span></div>
+                  <div><span style={{ color: 'var(--muted-foreground)' }}>期望薪资:</span> <span style={{ color: 'var(--foreground)' }}>{selectedResume.expected_salary}万/年</span></div>
+                </div>
+                <div className="flex items-center gap-3 text-sm pt-1" style={{ color: 'var(--muted-foreground)' }}>
                   <span>推荐岗位: {totalMatches} 个</span>
                   <label className="flex items-center gap-1">显示 Top-N:
-                    <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="border rounded px-2 py-1 text-foreground">
-                      {LIMIT_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}
+                    <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}
+                      className="rounded-sm px-2 py-1 text-sm"
+                      style={{ background: 'var(--card)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
+                      {LIMIT_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
                     </select>
                   </label>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {matchesLoading ? <LoadingSpinner /> : matchesError ? <EmptyState message={matchesError} /> : matches.length === 0 ? (
-              <EmptyState message="当前简历暂无推荐岗位" />
-            ) : matches.map((match, idx) => <MatchCard key={match.job_id} match={match} rank={idx + 1} mode="resume" />)}
-          </>
-        ) : <EmptyState message="请从左侧选择一份简历查看推荐岗位" />}
+              {matchesLoading ? <LoadingSpinner /> : matches.length === 0 ? (
+                <EmptyState message="该简历暂无推荐的岗位" />
+              ) : matches.map((match, idx) => <MatchCard key={match.job_id} match={match} rank={idx + 1} mode="resume" />)}
+            </>
+          ) : <EmptyState message="请从左侧选择一份简历查看推荐岗位" />}
+        </div>
       </div>
     </div>
   )

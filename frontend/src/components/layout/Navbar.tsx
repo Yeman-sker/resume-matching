@@ -11,22 +11,28 @@ const navItems = [
 
 export default function Navbar() {
   return (
-    <header className="border-b bg-white sticky top-0 z-50">
-      <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-        <div className="font-bold text-lg">简历-岗位匹配系统</div>
-        <nav className="flex items-center gap-1">
+    <header className="sticky top-0 z-50" style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
+      <div className="mx-auto px-6 h-[52px] flex items-center justify-between" style={{ maxWidth: '1300px' }}>
+        <div className="font-semibold tracking-tight" style={{ color: 'var(--foreground)', fontSize: '1.125rem' }}>
+          简历-岗位匹配系统
+        </div>
+        <nav className="flex items-center">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-1.5 px-3 py-2 rounded-md text-sm transition-colors ${
+                `inline-flex items-center gap-1.5 px-4 py-2 text-sm transition-colors ${
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    ? 'font-medium'
+                    : ''
                 }`
               }
+              style={({ isActive }) => ({
+                color: isActive ? 'var(--accent)' : 'var(--muted-foreground)',
+                background: isActive ? 'transparent' : 'transparent',
+              })}
             >
               <item.icon className="h-4 w-4" />
               {item.label}

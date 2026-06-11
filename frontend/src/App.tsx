@@ -10,7 +10,7 @@ import BatchControlPage from '@/pages/BatchControlPage'
 function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen" style={{ background: 'var(--background)' }}>
         <Navbar />
         <main className="container mx-auto px-4 py-6">
           <Routes>
