@@ -21,7 +21,18 @@ def read_hdfs_csv(path: str) -> pd.DataFrame:
         )
         if result.returncode != 0 or not result.stdout.strip():
             return pd.DataFrame()
-        return pd.read_csv(io.StringIO(result.stdout), encoding="utf-8-sig")
+        df = pd.read_csv(
+            io.StringIO(result.stdout),
+            encoding="utf-8-sig",
+            escapechar="\\",
+            on_bad_lines="skip",
+        )
+        valid_id_pattern = r"^(?:(?:JOB|RES)_[A-Z0-9]+(?:[-_][0-9]+)?|[A-Z0-9]{8}(?:[-_][0-9]+)?)$"
+        if "job_id" in df.columns:
+            df = df[df["job_id"].astype(str).str.match(valid_id_pattern, na=False)]
+        if "resume_id" in df.columns:
+            df = df[df["resume_id"].astype(str).str.match(valid_id_pattern, na=False)]
+        return df
     except (OSError, subprocess.SubprocessError, ValueError, subprocess.TimeoutExpired):
         return pd.DataFrame()
 

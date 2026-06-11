@@ -23,7 +23,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 **Python 环境**：
 - Python 3.10+
 - 上游：FastAPI + OpenAI API
-- 中游：PySpark 3.5.1 + jieba + scikit-learn + gensim
+- 中游：PySpark 3.5.1（Spark MLlib）+ jieba
 - 下游：FastAPI
 
 **前端**：
@@ -108,6 +108,7 @@ hdfs://localhost:9000/resume_matching/
 │   ├── resumes/*.csv
 │   └── jobs/*.csv
 ├── models/                  # 训练的模型文件
+│   ├── count_vectorizer/
 │   ├── tfidf/
 │   └── word2vec/
 ├── output/                  # 最终匹配结果
@@ -171,14 +172,14 @@ hdfs://localhost:9000/resume_matching/
 1. **Streaming 任务重启策略**：每 10 分钟自动退出，外层 supervisor 脚本自动重启，从 checkpoint 恢复
 2. **批处理调度**：APScheduler 每 10 分钟触发一次，训练模型 + 计算匹配分
 3. **数据流向**：单向流动，上游→中游→下游，不回流
-4. **模型版本管理**：模型文件名带版本号（如 `vectorizer_v15.pkl`）
+4. **模型版本管理**：MLlib 模型目录名带时间戳版本号（如 `tfidf_v202606112315/`）
 5. **文件命名**：时间戳格式 `YYYY-MM-DD_HH-MM.csv`
 
 ## 开发注意事项
 
 - 修改 Streaming 代码后必须清理对应的 checkpoint 目录
 - 所有文本字段处理前先转字符串类型
-- 技能字段用 JSON 数组格式存储（不是逗号分隔字符串）
+- 技能字段使用管道符 `|` 分隔，例如 `Python|SQL|Spark`
 - 分数范围统一为 0-100
 - 余弦相似度 [-1,1] 转换为分数：`(similarity + 1) / 2 * 100`
 - 推荐理由必须包含：共同技能、缺失技能、各维度是否满足

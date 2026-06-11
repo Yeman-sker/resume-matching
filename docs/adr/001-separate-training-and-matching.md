@@ -50,7 +50,7 @@ TF-IDF 和 Word2Vec 是**全局统计模型**，需要全量数据才能保证�
 
 - **频率**：每天凌晨 3 点运行一次
 - **数据**：读取全部历史数据（可选：滑动窗口，如最近 30 天）
-- **输出**：带日期版本的模型文件（如 `tfidf_v20260611.pkl`）
+- **输出**：带日期版本的 MLlib 模型目录（如 `tfidf_v20260611/`）
 - **存储**：保存到 HDFS `/resume_matching/models/`
 
 ### 2. 匹配计算任务（高频，增量）
@@ -94,14 +94,28 @@ def train_models_daily():
     resumes = spark.read.csv(...).filter(col("create_time") > cutoff)
     jobs = spark.read.csv(...).filter(col("create_time") > cutoff)
 
-    # 训练模型
-    tfidf = TfidfVectorizer(max_features=500).fit(all_texts)
-    w2v = Word2Vec(...).train(all_tokens)
+    # 使用 Spark MLlib 训练模型
+    cv_model = CountVectorizer(
+        inputCol="tokens",
+        outputCol="raw_features",
+        vocabSize=500,
+        minDF=2,
+    ).fit(train_df)
+    idf_model = IDF(
+        inputCol="raw_features",
+        outputCol="tfidf_features",
+    ).fit(cv_model.transform(train_df))
+    w2v_model = Word2Vec(
+        inputCol="tokens",
+        outputCol="w2v_vector",
+        vectorSize=100,
+    ).fit(train_df)
 
     # 保存带日期版本的模型
     version = datetime.now().strftime("%Y%m%d")
-    save_model(tfidf, f"tfidf_v{version}.pkl")
-    save_model(w2v, f"word2vec_v{version}.model")
+    cv_model.save(f"{HDFS_BASE}/models/count_vectorizer/cv_v{version}")
+    idf_model.save(f"{HDFS_BASE}/models/tfidf/tfidf_v{version}")
+    w2v_model.save(f"{HDFS_BASE}/models/word2vec/w2v_v{version}")
 ```
 
 **匹配任务** (`match_incremental.py`):

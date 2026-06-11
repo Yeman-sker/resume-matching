@@ -8,4 +8,12 @@ if [ ! -x "$PYTHON" ]; then
     exit 1
 fi
 
+# VM fallback: shared .venv may be missing pandas while the prepared AI env has it.
+if ! "$PYTHON" -c "import pandas" >/dev/null 2>&1; then
+    FALLBACK_PYTHON="$HOME/ai_env/bin/python"
+    if [ -x "$FALLBACK_PYTHON" ] && "$FALLBACK_PYTHON" -c "import pandas" >/dev/null 2>&1; then
+        PYTHON="$FALLBACK_PYTHON"
+    fi
+fi
+
 exec "$PYTHON" main.py

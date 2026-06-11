@@ -51,6 +51,7 @@ export interface Match {
   word2vec_score: number
   total_score: number
   semantic_score: number
+  rule_score: number
   skill_score: number
   education_score: number
   experience_score: number
