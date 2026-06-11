@@ -16,7 +16,8 @@ export interface Resume {
   education_level: number
   experience_years_num: number
   standard_location: string
-  standard_skills: string
+  skill_items_raw: string
+  certification_items: string
 }
 
 export interface Job {
@@ -35,8 +36,8 @@ export interface Job {
   education_required_level: number
   experience_required_num: number
   standard_location: string
-  required_skills_standard: string
-  preferred_skills_standard: string
+  required_skill_items_raw: string
+  preferred_skill_items_raw: string
   salary_min: number
   salary_max: number
 }
@@ -61,6 +62,7 @@ export interface Match {
   matched_skills: string
   missing_skills: string
   reason: string
+  rule_score: number
 }
 
 export interface MatchDetail {
