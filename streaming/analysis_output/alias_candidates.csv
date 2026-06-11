@@ -1,0 +1,28 @@
+﻿alias,canonical_skill,evidence_mentions,basis
+py,Python,136,显式技能字段 + 当前映射/大小写归一
+python,Python,90,显式技能字段 + 当前映射/大小写归一
+pandas,Pandas,83,显式技能字段 + 当前映射/大小写归一
+数据分析,Data Analysis,82,显式技能字段 + 当前映射/大小写归一
+pyspark,Spark,53,显式技能字段 + 当前映射/大小写归一
+Apache Spark,Spark,19,显式技能字段 + 当前映射/大小写归一
+PYTHON,Python,19,显式技能字段 + 当前映射/大小写归一
+numpy,NumPy,18,显式技能字段 + 当前映射/大小写归一
+sql,SQL,17,显式技能字段 + 当前映射/大小写归一
+数据可视化,Data Visualization,17,显式技能字段 + 当前映射/大小写归一
+数据统计,Data Analysis,11,显式技能字段 + 当前映射/大小写归一
+docker,Docker,8,显式技能字段 + 当前映射/大小写归一
+tableau,Tableau,8,显式技能字段 + 当前映射/大小写归一
+mysql,MySQL,5,显式技能字段 + 当前映射/大小写归一
+java,Java,4,显式技能字段 + 当前映射/大小写归一
+etl,ETL,3,显式技能字段 + 当前映射/大小写归一
+hadoop,Hadoop,3,显式技能字段 + 当前映射/大小写归一
+powerbi,PowerBI,3,显式技能字段 + 当前映射/大小写归一
+spring,Spring,3,显式技能字段 + 当前映射/大小写归一
+Numpy,NumPy,2,显式技能字段 + 当前映射/大小写归一
+flink,Flink,2,显式技能字段 + 当前映射/大小写归一
+hive,Hive,2,显式技能字段 + 当前映射/大小写归一
+机器学习,Machine Learning,2,显式技能字段 + 当前映射/大小写归一
+PANDAS,Pandas,1,显式技能字段 + 当前映射/大小写归一
+Py,Python,1,显式技能字段 + 当前映射/大小写归一
+SPRING,Spring,1,显式技能字段 + 当前映射/大小写归一
+spark,Spark,1,显式技能字段 + 当前映射/大小写归一

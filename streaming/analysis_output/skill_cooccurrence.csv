@@ -1,0 +1,238 @@
+﻿skill_a,skill_b,cooccurrence
+Python,SQL,305
+Linux,SQL,185
+Pandas,Python,165
+Pandas,SQL,165
+Python,Tableau,127
+SQL,Tableau,127
+Linux,Python,126
+Docker,Linux,119
+Linux,MySQL,119
+Docker,SQL,110
+MySQL,SQL,108
+Data Analysis,Python,104
+Docker,MySQL,104
+Data Analysis,SQL,103
+Data Analysis,Pandas,97
+SQL,Spark,90
+Pandas,Tableau,89
+Python,Spark,85
+Excel,Python,84
+Excel,SQL,84
+MySQL,Spring,82
+Linux,Spring,81
+Excel,Tableau,75
+SQL,Spring,74
+NumPy,Pandas,73
+Java,Linux,73
+Data Analysis,Tableau,71
+Docker,Spring,71
+NumPy,Python,71
+NumPy,SQL,71
+Hadoop,Spark,70
+Hive,Spark,70
+Docker,Python,70
+Linux,Spark,68
+Java,MySQL,68
+Java,Spring,68
+Excel,Pandas,67
+Java,SQL,65
+Hive,SQL,64
+PowerBI,Tableau,63
+Data Analysis,Excel,63
+Hadoop,Hive,62
+PowerBI,Python,62
+PowerBI,SQL,62
+Hadoop,SQL,61
+Data Visualization,Python,58
+Data Visualization,SQL,58
+Data Visualization,Tableau,58
+Hive,Python,57
+Data Visualization,PowerBI,57
+Docker,Java,57
+Machine Learning,Python,56
+MySQL,Python,55
+Hadoop,Python,54
+Hive,Linux,54
+Machine Learning,SQL,53
+Hadoop,Linux,52
+Machine Learning,Pandas,52
+ETL,SQL,49
+Flink,Hadoop,45
+Flink,Spark,45
+Flink,Hive,44
+Flink,SQL,42
+Data Analysis,NumPy,42
+ETL,Python,41
+ETL,Spark,39
+Flink,Linux,39
+Flink,Python,39
+Machine Learning,NumPy,39
+Machine Learning,Spark,33
+ETL,Hadoop,32
+ETL,Hive,32
+ETL,Linux,31
+Linux,Pandas,30
+Pandas,Spark,27
+NumPy,Tableau,26
+Excel,PowerBI,25
+Pandas,PowerBI,24
+Excel,NumPy,23
+Data Visualization,Excel,22
+Docker,Pandas,22
+Data Visualization,Pandas,21
+Linux,Machine Learning,20
+ETL,Flink,19
+NumPy,Spark,19
+Data Analysis,Machine Learning,19
+Docker,Spark,19
+Docker,Machine Learning,17
+Linux,NumPy,17
+Python,Spring,16
+Data Analysis,Spark,14
+Docker,NumPy,12
+Django,Linux,10
+Django,MySQL,10
+Django,Python,10
+MySQL,Pandas,10
+Docker,Hadoop,10
+Docker,ETL,9
+Django,Docker,9
+Python,excel,8
+SQL,excel,8
+Tableau,excel,8
+ETL,Pandas,8
+Docker,Hive,8
+Data Analysis,PowerBI,7
+ETL,Machine Learning,7
+Data Analysis,Linux,7
+ETL,Tableau,7
+Data Visualization,ETL,6
+ETL,PowerBI,6
+Machine Learning,Tableau,6
+Pandas,excel,5
+Data Analysis,ETL,5
+Docker,Flink,5
+Flink,Java,5
+Hadoop,Java,5
+Hive,Java,5
+Java,Spark,5
+ETL,Java,5
+Django,SQL,5
+Data Analysis,excel,4
+Data Analysis,Data Visualization,4
+Data Visualization,excel,4
+PowerBI,excel,4
+Spark,Tableau,4
+Pandas,machine learning,4
+Python,machine learning,4
+SQL,machine learning,4
+ETL,NumPy,4
+Java,Python,4
+Django,Flask,4
+Docker,Flask,4
+Flask,Linux,4
+Flask,MySQL,4
+Flask,Python,4
+SQL,linux,4
+ETL,MySQL,3
+Docker,Redis,3
+Linux,Redis,3
+MySQL,Redis,3
+NumPy,machine learning,3
+Data Analysis,Docker,3
+NumPy,PowerBI,3
+Python,linux,3
+Hadoop,Machine Learning,3
+Hive,Machine Learning,3
+Django,FastAPI,2
+Django,Redis,2
+Docker,FastAPI,2
+FastAPI,Linux,2
+FastAPI,MySQL,2
+FastAPI,Python,2
+Python,Redis,2
+Data Analysis,Flink,2
+Data Analysis,Hadoop,2
+Data Analysis,Hive,2
+Docker,linux,2
+Pandas,linux,2
+Pandas,Spring,2
+Flask,SQL,2
+ETL,Excel,2
+ETL,Spring,2
+Data Visualization,Docker,2
+Docker,Tableau,2
+Hadoop,Pandas,2
+FastAPI,Redis,1
+Excel,Spark,1
+Spark,machine learning,1
+Data Visualization,NumPy,1
+Machine Learning,linux,1
+NumPy,linux,1
+Data Analysis,machine learning,1
+Linux,machine learning,1
+Django,Pandas,1
+Flask,Pandas,1
+Data Analysis,EXCEL,1
+EXCEL,NumPy,1
+EXCEL,Pandas,1
+EXCEL,Python,1
+EXCEL,SQL,1
+EXCEL,Tableau,1
+Linux,MACHINE LEARNING,1
+MACHINE LEARNING,NumPy,1
+MACHINE LEARNING,Pandas,1
+MACHINE LEARNING,Python,1
+MACHINE LEARNING,SQL,1
+MACHINE LEARNING,Spark,1
+Excel,Machine Learning,1
+Java,Redis,1
+Redis,SQL,1
+Redis,Spring,1
+Flask,Redis,1
+Django,Git,1
+Git,Linux,1
+Git,MySQL,1
+Git,Python,1
+Git,SQL,1
+PowerBI,data visualization,1
+Python,data visualization,1
+SQL,data visualization,1
+Tableau,data visualization,1
+Docker,MyBatis,1
+Docker,SpringBoot,1
+Java,MyBatis,1
+Java,SpringBoot,1
+Linux,MyBatis,1
+Linux,SpringBoot,1
+MyBatis,MySQL,1
+MyBatis,SQL,1
+MyBatis,Spring,1
+MyBatis,SpringBoot,1
+MySQL,SpringBoot,1
+SQL,SpringBoot,1
+Spring,SpringBoot,1
+Java,linux,1
+MySQL,linux,1
+Spring,linux,1
+Flink,linux,1
+Hadoop,linux,1
+Hive,linux,1
+Spark,linux,1
+Data Analysis,MySQL,1
+linux,machine learning,1
+Docker,Excel,1
+Docker,Kafka,1
+Flink,Kafka,1
+Machine Learning,PowerBI,1
+Data Visualization,Linux,1
+Data Visualization,Spark,1
+Docker,PowerBI,1
+Docker,kafka,1
+PowerBI,kafka,1
+Hive,Tableau,1
+Hive,NumPy,1
+Hive,Pandas,1
+PowerBI,Spark,1
+Data Visualization,Machine Learning,1

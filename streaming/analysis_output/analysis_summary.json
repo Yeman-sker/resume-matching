@@ -1,0 +1,89 @@
+{
+  "analyzed_at_utc": "2026-06-11T22:25:28.165806+00:00",
+  "resume_files": 50,
+  "job_files": 49,
+  "resume_rows": 328,
+  "job_rows": 56,
+  "explicit_skill_mentions": 2628,
+  "canonical_skill_count": 35,
+  "canonical_inventory_count": 27,
+  "stopword_candidate_count": 117,
+  "new_recommended_stopword_count": 12,
+  "alias_candidate_count": 27,
+  "top_skills": [
+    {
+      "canonical_skill": "Python",
+      "mentions": 400
+    },
+    {
+      "canonical_skill": "SQL",
+      "mentions": 371
+    },
+    {
+      "canonical_skill": "Linux",
+      "mentions": 203
+    },
+    {
+      "canonical_skill": "Pandas",
+      "mentions": 171
+    },
+    {
+      "canonical_skill": "Docker",
+      "mentions": 152
+    },
+    {
+      "canonical_skill": "Spark",
+      "mentions": 151
+    },
+    {
+      "canonical_skill": "Tableau",
+      "mentions": 136
+    },
+    {
+      "canonical_skill": "MySQL",
+      "mentions": 121
+    },
+    {
+      "canonical_skill": "Data Analysis",
+      "mentions": 113
+    },
+    {
+      "canonical_skill": "Excel",
+      "mentions": 85
+    },
+    {
+      "canonical_skill": "Spring",
+      "mentions": 84
+    },
+    {
+      "canonical_skill": "Hadoop",
+      "mentions": 75
+    },
+    {
+      "canonical_skill": "Java",
+      "mentions": 75
+    },
+    {
+      "canonical_skill": "Hive",
+      "mentions": 74
+    },
+    {
+      "canonical_skill": "NumPy",
+      "mentions": 73
+    }
+  ],
+  "top_new_stopwords": [
+    "负责",
+    "以上",
+    "要求",
+    "使用",
+    "熟悉",
+    "参与",
+    "具备",
+    "进行",
+    "相关",
+    "工作",
+    "良好",
+    "完成"
+  ]
+}
