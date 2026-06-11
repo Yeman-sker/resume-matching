@@ -2,13 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { useAppStore } from '@/store'
 import type { BatchStatus } from '@/types'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Activity, Clock, History, Pause, Play, RefreshCw, Timer, Workflow } from 'lucide-react'
 
 const RESULT_LABELS: Record<string, string> = {
   success: '成功',
   failed: '失败',
   skipped: '跳过（数据不足）',
+}
+
+const RESULT_COLORS: Record<string, string> = {
+  success: '#1f8a65',
+  failed: '#cf2d56',
+  skipped: '#f54e00',
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -88,104 +94,146 @@ export default function BatchControlPage() {
   const lastRun = status?.last_run ?? null
   const paused = status?.schedule_paused ?? false
   const elapsed = status?.current_run ? elapsedSeconds(status.current_run.started_at) : null
+  const triggerDisabled = !connected || running || loading
+
+  const cardStyle: React.CSSProperties = {
+    position: 'relative',
+    background: 'var(--card)',
+    borderRadius: '4px',
+    padding: '1.5rem',
+  }
+  const cardBorderOverlay: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    borderRadius: '4px',
+    border: '1px solid var(--border)',
+    pointerEvents: 'none',
+  }
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold">批处理控制</h1>
-        <p className="text-muted-foreground">手动触发模型训练与匹配计算，查看批处理任务状态</p>
+      <div className="flex items-center gap-2">
+        <Workflow className="h-5 w-5" style={{ color: 'var(--accent)' }} />
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--foreground)' }}>批处理控制</h1>
+          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>手动触发模型训练与匹配计算，查看批处理任务状态</p>
+        </div>
       </div>
 
       {serviceError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-md px-4 py-3 text-sm" style={{ background: 'var(--card)', border: '1px solid #cf2d5640', color: '#cf2d56' }}>
           批处理服务未连接：{serviceError}
         </div>
       )}
       {actionError && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="rounded-md px-4 py-3 text-sm" style={{ background: 'var(--card)', border: '1px solid #f54e0040', color: '#f54e00' }}>
           {actionError}
         </div>
       )}
 
-      <Card>
-        <CardHeader><CardTitle>运行状态</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-2">
-            <span className={`inline-block h-3 w-3 rounded-full ${running ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
-            <span className="font-medium">
-              {!connected
-                ? '服务未连接'
-                : running
-                  ? `任务运行中（${TRIGGER_LABELS[status?.current_run?.trigger ?? ''] ?? '-'}触发${elapsed !== null ? `，已耗时 ${formatDuration(elapsed)}` : ''}）`
-                  : '空闲'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Metric
-              title="上次运行结果"
-              value={lastRun ? `${RESULT_LABELS[lastRun.result] ?? lastRun.result}（${TRIGGER_LABELS[lastRun.trigger] ?? '-'}触发）` : '-'}
-            />
-            <Metric title="上次运行耗时" value={lastRun ? formatDuration(lastRun.duration_seconds) : '-'} />
-            <Metric title="下次自动运行" value={paused ? '已暂停' : status?.next_scheduled_run ?? '-'} />
-            <Metric title="自动调度" value={connected ? (paused ? '已暂停' : '每 10 分钟') : '-'} />
-          </div>
-
-          {lastRun && (
-            <div className="text-sm text-muted-foreground">
-              上次运行时间: {lastRun.started_at} ~ {lastRun.finished_at}
+      <div style={cardStyle}>
+        <div style={cardBorderOverlay} />
+        <div className="relative">
+          <h3 className="flex items-center gap-2 font-semibold mb-4" style={{ color: 'var(--foreground)' }}>
+            <Activity className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+            运行状态
+          </h3>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2.5 w-2.5 rounded-full"
+                style={{ background: running ? '#1f8a65' : 'var(--muted-foreground)' }} />
+              <span className="font-semibold text-lg" style={{ color: 'var(--foreground)' }}>
+                {!connected
+                  ? '服务未连接'
+                  : running
+                    ? `任务运行中（${TRIGGER_LABELS[status?.current_run?.trigger ?? ''] ?? '-'}触发${elapsed !== null ? `，已耗时 ${formatDuration(elapsed)}` : ''}）`
+                    : '空闲'}
+              </span>
             </div>
-          )}
-          {lastRun?.result === 'failed' && lastRun.error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 whitespace-pre-wrap">
-              {lastRun.error}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-sm" style={{ background: 'var(--secondary)' }}>
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted-foreground)' }}><History className="h-3.5 w-3.5" />上次运行结果</div>
+                <div className="text-lg font-bold mt-1" style={{ color: lastRun ? RESULT_COLORS[lastRun.result] ?? 'var(--foreground)' : 'var(--foreground)' }}>
+                  {lastRun ? RESULT_LABELS[lastRun.result] ?? lastRun.result : '-'}
+                </div>
+              </div>
+              <div className="p-3 rounded-sm" style={{ background: 'var(--secondary)' }}>
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted-foreground)' }}><Timer className="h-3.5 w-3.5" />上次运行耗时</div>
+                <div className="text-lg font-bold mt-1" style={{ color: 'var(--foreground)' }}>{lastRun ? formatDuration(lastRun.duration_seconds) : '-'}</div>
+              </div>
+              <div className="p-3 rounded-sm" style={{ background: 'var(--secondary)' }}>
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted-foreground)' }}><Clock className="h-3.5 w-3.5" />下次自动运行</div>
+                <div className="text-lg font-bold mt-1" style={{ color: 'var(--foreground)' }}>
+                  {paused ? '已暂停' : status?.next_scheduled_run?.slice(11) ?? '-'}
+                </div>
+              </div>
+              <div className="p-3 rounded-sm" style={{ background: 'var(--secondary)' }}>
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted-foreground)' }}><RefreshCw className="h-3.5 w-3.5" />自动调度</div>
+                <div className="text-lg font-bold mt-1" style={{ color: 'var(--foreground)' }}>{connected ? (paused ? '已暂停' : '每 10 分钟') : '-'}</div>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader><CardTitle>控制面板</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-3">
-            <Button onClick={() => void runAction(triggerBatch)} disabled={!connected || running || loading}>
-              立即训练并匹配
-            </Button>
-            <Button
-              onClick={() => void runAction(paused ? resumeBatchSchedule : pauseBatchSchedule)}
-              disabled={!connected || loading}
-              variant="outline"
-            >
-              {paused ? '恢复自动调度' : '暂停自动调度'}
-            </Button>
+            {lastRun && (
+              <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                上次运行时间: {lastRun.started_at} ~ {lastRun.finished_at}（{TRIGGER_LABELS[lastRun.trigger] ?? '-'}触发）
+              </div>
+            )}
+            {lastRun?.result === 'failed' && lastRun.error && (
+              <div className="rounded-md px-3 py-2 text-sm whitespace-pre-wrap" style={{ background: 'var(--secondary)', border: '1px solid #cf2d5640', color: '#cf2d56' }}>
+                {lastRun.error}
+              </div>
+            )}
           </div>
-          <p className="text-sm text-muted-foreground">
-            批处理任务 = 模型训练 + 匹配计算，整体执行。任务每 10 分钟自动运行一次，手动触发不影响定时计划；任务运行期间无法重复触发。
-          </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader><CardTitle>上次运行日志</CardTitle></CardHeader>
-        <CardContent>
+      <div style={cardStyle}>
+        <div style={cardBorderOverlay} />
+        <div className="relative">
+          <h3 className="font-semibold mb-4" style={{ color: 'var(--foreground)' }}>控制面板</h3>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <Button
+                onClick={() => void runAction(triggerBatch)}
+                disabled={triggerDisabled}
+                className="gap-2"
+                style={{ background: triggerDisabled ? 'var(--secondary)' : 'var(--accent)', color: triggerDisabled ? 'var(--muted-foreground)' : '#fff', border: 'none' }}
+              >
+                <Play className="h-4 w-4" />
+                立即训练并匹配
+              </Button>
+              <Button
+                onClick={() => void runAction(paused ? resumeBatchSchedule : pauseBatchSchedule)}
+                disabled={!connected || loading}
+                variant="outline"
+                className="gap-2"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+              >
+                {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                {paused ? '恢复自动调度' : '暂停自动调度'}
+              </Button>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              批处理任务 = 模型训练 + 匹配计算，整体执行。任务每 10 分钟自动运行一次，手动触发不影响定时计划；任务运行期间无法重复触发。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={cardBorderOverlay} />
+        <div className="relative">
+          <h3 className="font-semibold mb-4" style={{ color: 'var(--foreground)' }}>上次运行日志</h3>
           {status?.last_run_log ? (
-            <pre className="max-h-80 overflow-auto rounded-md bg-gray-950 p-3 text-xs leading-5 text-gray-100 whitespace-pre-wrap">
+            <pre className="max-h-80 overflow-auto rounded-sm p-3 text-xs leading-5 font-mono whitespace-pre-wrap" style={{ background: '#26251e', color: '#f2f1ed' }}>
               {status.last_run_log}
             </pre>
           ) : (
-            <p className="text-sm text-muted-foreground">暂无日志</p>
+            <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>暂无日志</p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
-  )
-}
-
-function Metric({ title, value }: { title: string; value: string }) {
-  return (
-    <Card>
-      <CardHeader className="pb-1"><CardDescription>{title}</CardDescription></CardHeader>
-      <CardContent><div className="text-xl font-bold">{value}</div></CardContent>
-    </Card>
   )
 }
