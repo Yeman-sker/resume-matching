@@ -27,7 +27,7 @@ export default function MatchCard({ match, rank, mode }: MatchCardProps) {
   const missingList = match.missing_skills ? match.missing_skills.split('|').filter((s) => s && s !== '无') : []
 
   return (
-    <div className="relative transition-colors" style={{ background: 'var(--card)', borderRadius: '4px', borderLeft: `3px solid ${bandColor}` }}>
+    <div className="card-lift relative" style={{ background: 'var(--card)', borderRadius: '4px', borderLeft: `3px solid ${bandColor}` }}>
       <div style={{ position: 'absolute', inset: 0, borderRadius: '4px', border: '1px solid var(--border)', borderLeft: 'none', pointerEvents: 'none' }} />
       <div className="relative p-4 space-y-3">
         <div className="flex items-start justify-between">
@@ -88,22 +88,37 @@ export default function MatchCard({ match, rank, mode }: MatchCardProps) {
               style={{ color: 'var(--accent)' }}
               onClick={() => setShowReason((v) => !v)}
             >
-              {showReason ? '▼ 收起推荐理由' : '▶ 展开推荐理由'}
+              <span
+                className="inline-block transition-transform duration-200"
+                style={{ transform: showReason ? 'rotate(90deg)' : 'none' }}
+              >
+                ▶
+              </span>{' '}
+              {showReason ? '收起推荐理由' : '展开推荐理由'}
             </button>
-            {showReason && (
-              <div className="mt-2 p-3 rounded-sm text-xs whitespace-pre-line" style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}>
-                {match.reason}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateRows: showReason ? '1fr' : '0fr',
+                opacity: showReason ? 1 : 0,
+                transition: 'grid-template-rows 0.35s var(--ease-out-soft), opacity 0.3s ease',
+              }}
+            >
+              <div className="overflow-hidden">
+                <div className="mt-2 p-3 rounded-sm text-xs whitespace-pre-line" style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}>
+                  {match.reason}
+                </div>
               </div>
-            )}
+            </div>
           </div>
         )}
 
         <button
           onClick={() => navigate(`/match/${match.resume_id}/${match.job_id}?from=${from}&fromId=${fromId}`)}
-          className="text-xs font-medium transition-opacity hover:opacity-75"
+          className="group text-xs font-medium transition-opacity hover:opacity-75"
           style={{ color: 'var(--accent)' }}
         >
-          查看详情 →
+          查看详情 <span className="inline-block transition-transform duration-200 group-hover:translate-x-0.5">→</span>
         </button>
       </div>
     </div>

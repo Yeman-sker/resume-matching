@@ -61,7 +61,7 @@ export default function MatchDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 stagger">
       <div>
         <Link to={backLink} className="inline-flex items-center gap-1 text-sm transition-opacity hover:opacity-75" style={{ color: 'var(--accent)' }}>
           <ArrowLeft className="h-4 w-4" />

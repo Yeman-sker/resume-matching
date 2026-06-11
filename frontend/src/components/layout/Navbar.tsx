@@ -23,16 +23,10 @@ export default function Navbar() {
               to={item.to}
               end={item.to === '/'}
               className={({ isActive }) =>
-                `inline-flex items-center gap-1.5 px-4 py-2 text-sm transition-colors ${
-                  isActive
-                    ? 'font-medium'
-                    : ''
+                `nav-link inline-flex items-center gap-1.5 px-4 py-2 text-sm ${
+                  isActive ? 'nav-link--active' : ''
                 }`
               }
-              style={({ isActive }) => ({
-                color: isActive ? 'var(--accent)' : 'var(--muted-foreground)',
-                background: isActive ? 'transparent' : 'transparent',
-              })}
             >
               <item.icon className="h-4 w-4" />
               {item.label}

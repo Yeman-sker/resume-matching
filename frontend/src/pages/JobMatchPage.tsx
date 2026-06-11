@@ -94,14 +94,7 @@ export default function JobMatchPage() {
               <div
                 key={job.job_id}
                 onClick={() => setSearchParams({ jobId: job.job_id })}
-                className="px-3 py-2.5 cursor-pointer transition-colors"
-                style={{
-                  borderBottom: '1px solid var(--border)',
-                  background: selectedJobId === job.job_id ? 'var(--secondary)' : 'transparent',
-                  borderLeft: selectedJobId === job.job_id ? '2px solid var(--accent)' : '2px solid transparent',
-                }}
-                onMouseEnter={(e) => { if (selectedJobId !== job.job_id) e.currentTarget.style.background = 'var(--warm-card-hover)' }}
-                onMouseLeave={(e) => { if (selectedJobId !== job.job_id) e.currentTarget.style.background = 'transparent' }}
+                className={`list-row px-3 py-2.5 cursor-pointer ${selectedJobId === job.job_id ? 'list-row--selected' : ''}`}
               >
                 <div className="font-medium text-sm" style={{ color: 'var(--foreground)' }}>{job.job_title}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{job.job_id} · {job.department} · {job.standard_location || job.location}</div>
@@ -113,7 +106,7 @@ export default function JobMatchPage() {
         <div className="flex-1 space-y-4">
           {selectedJob ? (
             <>
-              <div className="p-4 space-y-2" style={{ background: 'var(--card)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+              <div key={selectedJob.job_id} className="anim-enter p-4 space-y-2" style={{ background: 'var(--card)', borderRadius: '4px', border: '1px solid var(--border)' }}>
                 <h3 className="font-semibold" style={{ color: 'var(--foreground)' }}>{selectedJob.job_title}</h3>
                 <div className="grid gap-1.5 text-sm md:grid-cols-4">
                   <div><span style={{ color: 'var(--muted-foreground)' }}>部门:</span> <span style={{ color: 'var(--foreground)' }}>{selectedJob.department}</span></div>
@@ -137,7 +130,11 @@ export default function JobMatchPage() {
 
               {matchesLoading ? <LoadingSpinner /> : matchesError ? <EmptyState message={matchesError} /> : matches.length === 0 ? (
                 <EmptyState message="当前岗位暂无匹配的候选人" />
-              ) : matches.map((match, idx) => <MatchCard key={match.resume_id} match={match} rank={idx + 1} mode="job" />)}
+              ) : (
+                <div key={`${selectedJobId}-${limit}`} className="stagger space-y-4">
+                  {matches.map((match, idx) => <MatchCard key={match.resume_id} match={match} rank={idx + 1} mode="job" />)}
+                </div>
+              )}
             </>
           ) : <EmptyState message="请从左侧选择一个岗位查看匹配候选人" />}
         </div>

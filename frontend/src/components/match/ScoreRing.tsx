@@ -33,7 +33,8 @@ export default function ScoreRing({ score, size = 140, label = '综合分' }: Sc
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            className="transition-all duration-700"
+            className="ring-draw transition-all duration-700"
+            style={{ '--ring-circumference': `${circumference}` } as React.CSSProperties}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">

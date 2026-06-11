@@ -55,7 +55,7 @@ export default function GeneratorControlPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 stagger">
       <div className="flex items-center gap-2">
         <Zap className="h-5 w-5" style={{ color: 'var(--accent)' }} />
         <div>
@@ -73,8 +73,8 @@ export default function GeneratorControlPage() {
           </h3>
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <span className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ background: status?.running ? '#1f8a65' : 'var(--warm-text-mid)' }} />
+              <span className={`inline-block h-2.5 w-2.5 rounded-full transition-colors duration-300 ${status?.running ? 'pulse-dot' : ''}`}
+                style={{ background: status?.running ? '#1f8a65' : 'var(--muted-foreground)' }} />
               <span className="font-semibold text-lg" style={{ color: 'var(--foreground)' }}>{status?.running ? '运行中' : '已停止'}</span>
             </div>
 

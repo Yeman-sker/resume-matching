@@ -12,7 +12,7 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon }: StatCardProps) {
   return (
-    <div className="card--stat" style={{ position: 'relative', background: 'var(--card)', borderRadius: '4px', paddingInline: '1.5rem', paddingTop: '1.25rem', paddingBottom: '1.5rem' }}>
+    <div className="card--stat card-lift" style={{ position: 'relative', background: 'var(--card)', borderRadius: '4px', paddingInline: '1.5rem', paddingTop: '1.25rem', paddingBottom: '1.5rem' }}>
       <div style={{ position: 'absolute', inset: 0, borderRadius: '4px', border: '1px solid var(--border)', pointerEvents: 'none' }} />
       <div className="flex items-start justify-between">
         <div>
@@ -60,7 +60,7 @@ export default function Dashboard() {
     : []
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 stagger">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--foreground)' }}>
           简历-岗位匹配系统
@@ -70,7 +70,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-5 stagger">
         <StatCard
           title="简历总数"
           value={status.total_resumes.toLocaleString()}
@@ -144,35 +144,29 @@ export default function Dashboard() {
         <div style={{ position: 'absolute', inset: 0, borderRadius: '4px', border: '1px solid var(--border)', pointerEvents: 'none' }} />
         <h3 className="font-semibold mb-4" style={{ color: 'var(--foreground)' }}>快捷入口</h3>
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
-          <Link to="/jobs" className="flex items-center gap-3 p-3 rounded-sm transition-colors" style={{ background: 'var(--secondary)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--warm-card-03)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--secondary)' }}>
+          <Link to="/jobs" className="quick-link flex items-center gap-3 p-3 rounded-sm">
             <Briefcase className="h-5 w-5 shrink-0" style={{ color: 'var(--accent)' }} />
             <div className="min-w-0">
               <div className="font-medium text-sm" style={{ color: 'var(--foreground)' }}>岗位匹配</div>
               <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>查看岗位的候选人匹配</div>
             </div>
-            <ArrowRight className="ml-auto h-4 w-4 shrink-0" style={{ color: 'var(--muted-foreground)' }} />
+            <ArrowRight className="quick-link-arrow ml-auto h-4 w-4 shrink-0" style={{ color: 'var(--muted-foreground)' }} />
           </Link>
-          <Link to="/resumes" className="flex items-center gap-3 p-3 rounded-sm transition-colors" style={{ background: 'var(--secondary)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--warm-card-03)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--secondary)' }}>
+          <Link to="/resumes" className="quick-link flex items-center gap-3 p-3 rounded-sm">
             <Users className="h-5 w-5 shrink-0" style={{ color: 'var(--accent)' }} />
             <div className="min-w-0">
               <div className="font-medium text-sm" style={{ color: 'var(--foreground)' }}>简历推荐</div>
               <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>查看简历的推荐岗位</div>
             </div>
-            <ArrowRight className="ml-auto h-4 w-4 shrink-0" style={{ color: 'var(--muted-foreground)' }} />
+            <ArrowRight className="quick-link-arrow ml-auto h-4 w-4 shrink-0" style={{ color: 'var(--muted-foreground)' }} />
           </Link>
-          <Link to="/generator" className="flex items-center gap-3 p-3 rounded-sm transition-colors" style={{ background: 'var(--secondary)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--warm-card-03)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--secondary)' }}>
+          <Link to="/generator" className="quick-link flex items-center gap-3 p-3 rounded-sm">
             <Zap className="h-5 w-5 shrink-0" style={{ color: 'var(--accent)' }} />
             <div className="min-w-0">
               <div className="font-medium text-sm" style={{ color: 'var(--foreground)' }}>生成器控制</div>
               <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>启停数据生成服务</div>
             </div>
-            <ArrowRight className="ml-auto h-4 w-4 shrink-0" style={{ color: 'var(--muted-foreground)' }} />
+            <ArrowRight className="quick-link-arrow ml-auto h-4 w-4 shrink-0" style={{ color: 'var(--muted-foreground)' }} />
           </Link>
         </div>
       </div>
@@ -184,10 +178,10 @@ function StatusRow({ label, running }: { label: string; running: boolean }) {
   return (
     <div className="flex items-center justify-between py-1">
       <span className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{label}</span>
-      <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium"
+      <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors duration-300"
         style={{ background: running ? 'rgba(31,138,101,0.12)' : 'var(--secondary)', color: running ? '#1f8a65' : 'var(--muted-foreground)' }}>
-        <span className="inline-block h-1.5 w-1.5 rounded-full"
-          style={{ background: running ? '#1f8a65' : 'var(--warm-text-mid)' }} />
+        <span className={`inline-block h-1.5 w-1.5 rounded-full transition-colors duration-300 ${running ? 'pulse-dot' : ''}`}
+          style={{ background: running ? '#1f8a65' : 'var(--muted-foreground)' }} />
         {running ? '运行中' : '已停止'}
       </span>
     </div>

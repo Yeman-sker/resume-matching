@@ -446,7 +446,7 @@ export default function BatchControlPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 stagger">
       <style>{PIPELINE_KEYFRAMES}</style>
       <div className="flex items-center gap-2">
         <Workflow className="h-5 w-5" style={{ color: 'var(--accent)' }} />

@@ -27,7 +27,7 @@ export default function ScoreBar({ label, value, weight }: ScoreBarProps) {
       </div>
       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--secondary)' }}>
         <div
-          className="h-full rounded-full transition-all duration-500"
+          className="grow-bar h-full rounded-full transition-all duration-500"
           style={{ width: `${Math.max(clampedValue, 2)}%`, background: colors.bar }}
         />
       </div>

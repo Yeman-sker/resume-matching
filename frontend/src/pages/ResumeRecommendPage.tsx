@@ -73,14 +73,7 @@ export default function ResumeRecommendPage() {
               <div
                 key={resume.resume_id}
                 onClick={() => handleSelectResume(resume.resume_id)}
-                className="px-3 py-2.5 cursor-pointer transition-colors"
-                style={{
-                  borderBottom: '1px solid var(--border)',
-                  background: selectedResumeId === resume.resume_id ? 'var(--secondary)' : 'transparent',
-                  borderLeft: selectedResumeId === resume.resume_id ? '2px solid var(--accent)' : '2px solid transparent',
-                }}
-                onMouseEnter={(e) => { if (selectedResumeId !== resume.resume_id) e.currentTarget.style.background = 'var(--warm-card-hover)' }}
-                onMouseLeave={(e) => { if (selectedResumeId !== resume.resume_id) e.currentTarget.style.background = 'transparent' }}
+                className={`list-row px-3 py-2.5 cursor-pointer ${selectedResumeId === resume.resume_id ? 'list-row--selected' : ''}`}
               >
                 <div className="font-medium text-sm" style={{ color: 'var(--foreground)' }}>{resume.name}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
@@ -99,7 +92,7 @@ export default function ResumeRecommendPage() {
         <div className="flex-1 space-y-4">
           {selectedResume ? (
             <>
-              <div className="p-4 space-y-2" style={{ background: 'var(--card)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+              <div key={selectedResume.resume_id} className="anim-enter p-4 space-y-2" style={{ background: 'var(--card)', borderRadius: '4px', border: '1px solid var(--border)' }}>
                 <h3 className="font-semibold" style={{ color: 'var(--foreground)' }}>{selectedResume.name}</h3>
                 <div className="grid gap-1.5 text-sm md:grid-cols-4">
                   <div><span style={{ color: 'var(--muted-foreground)' }}>学历:</span> <span style={{ color: 'var(--foreground)' }}>{selectedResume.education}</span></div>
@@ -121,7 +114,11 @@ export default function ResumeRecommendPage() {
 
               {matchesLoading ? <LoadingSpinner /> : matches.length === 0 ? (
                 <EmptyState message="该简历暂无推荐的岗位" />
-              ) : matches.map((match, idx) => <MatchCard key={match.job_id} match={match} rank={idx + 1} mode="resume" />)}
+              ) : (
+                <div key={`${selectedResumeId}-${limit}`} className="stagger space-y-4">
+                  {matches.map((match, idx) => <MatchCard key={match.job_id} match={match} rank={idx + 1} mode="resume" />)}
+                </div>
+              )}
             </>
           ) : <EmptyState message="请从左侧选择一份简历查看推荐岗位" />}
         </div>

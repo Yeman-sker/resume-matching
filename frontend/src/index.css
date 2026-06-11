@@ -94,3 +94,182 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ===== 全局动效体系 ===== */
+
+:root {
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes grow-bar {
+  from {
+    width: 0%;
+  }
+}
+
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-circumference);
+  }
+}
+
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(31, 138, 101, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(31, 138, 101, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(31, 138, 101, 0);
+  }
+}
+
+/* 路由切换：页面整体淡入上移 */
+.page-enter {
+  animation: page-in 0.3s var(--ease-out-soft) both;
+}
+
+/* 单元素入场 */
+.anim-enter {
+  animation: rise-in 0.35s var(--ease-out-soft) both;
+}
+
+/* 子元素级联入场 */
+.stagger > * {
+  animation: rise-in 0.4s var(--ease-out-soft) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 30ms; }
+.stagger > *:nth-child(2) { animation-delay: 70ms; }
+.stagger > *:nth-child(3) { animation-delay: 110ms; }
+.stagger > *:nth-child(4) { animation-delay: 150ms; }
+.stagger > *:nth-child(5) { animation-delay: 190ms; }
+.stagger > *:nth-child(6) { animation-delay: 230ms; }
+.stagger > *:nth-child(7) { animation-delay: 270ms; }
+.stagger > *:nth-child(n + 8) { animation-delay: 310ms; }
+
+/* 可交互卡片：悬浮轻微上浮 + 阴影 */
+.card-lift {
+  transition:
+    transform 0.25s var(--ease-out-soft),
+    box-shadow 0.25s var(--ease-out-soft);
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(38, 37, 30, 0.08);
+}
+
+/* 左侧列表行：悬浮/选中过渡 */
+.list-row {
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--border);
+  transition:
+    background-color 0.18s ease,
+    border-left-color 0.18s ease;
+}
+.list-row:not(.list-row--selected):hover {
+  background: #ebeae5;
+}
+.list-row--selected {
+  background: var(--secondary);
+  border-left-color: var(--accent);
+}
+
+/* 快捷入口：悬浮变色 + 箭头滑动 */
+.quick-link {
+  background: var(--secondary);
+  transition:
+    background-color 0.2s ease,
+    transform 0.25s var(--ease-out-soft);
+}
+.quick-link:hover {
+  background: #e6e5e0;
+  transform: translateY(-1px);
+}
+.quick-link .quick-link-arrow {
+  transition:
+    transform 0.25s var(--ease-out-soft),
+    color 0.2s ease;
+}
+.quick-link:hover .quick-link-arrow {
+  transform: translateX(3px);
+  color: var(--accent);
+}
+
+/* 顶部导航：颜色过渡 + 活动下划线滑入 */
+.nav-link {
+  position: relative;
+  color: var(--muted-foreground);
+  transition: color 0.2s ease;
+}
+.nav-link:hover {
+  color: var(--foreground);
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform 0.25s var(--ease-out-soft);
+}
+.nav-link--active {
+  color: var(--accent);
+  font-weight: 500;
+}
+.nav-link--active:hover {
+  color: var(--accent);
+}
+.nav-link--active::after {
+  transform: scaleX(1);
+}
+
+/* 运行状态指示灯脉冲 */
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-out infinite;
+}
+
+/* 分数条/分数环：首次渲染从 0 生长到目标值 */
+.grow-bar {
+  animation: grow-bar 0.7s var(--ease-out-soft) both;
+}
+.ring-draw {
+  animation: ring-draw 0.9s var(--ease-out-soft) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .anim-enter,
+  .stagger > *,
+  .grow-bar,
+  .ring-draw,
+  .pulse-dot {
+    animation: none !important;
+  }
+  .card-lift,
+  .list-row,
+  .quick-link,
+  .nav-link,
+  .nav-link::after,
+  .quick-link .quick-link-arrow {
+    transition: none !important;
+  }
+}
