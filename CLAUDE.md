@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+
+## Offer ADRs sparingly
+
+Only offer to create an ADR when all three are true:
+
+1. Hard to reverse — the cost of changing your mind later is meaningful 
+2. Surprising without context — a future reader will wonder "why did they do it this way?" 
+3. The result of a real trade-off - there were genuine alternatives and you picked one for specific reasons
+
 ## 项目概述
 
 这是一个教学性的大数据+AI应用项目：**简历-岗位人才匹配系统**。
