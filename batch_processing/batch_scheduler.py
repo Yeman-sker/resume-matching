@@ -1,3 +1,5 @@
+import copy
+import json
 import os
 import subprocess
 import threading
@@ -12,6 +14,9 @@ JOB_TIMEOUT_SECONDS = 300
 # 与 batch_job.py 的 EXIT_CODE_SKIPPED 保持一致
 EXIT_CODE_SKIPPED = 3
 LOG_MAX_CHARS = 8000
+# batch_job.py 通过 stdout 输出 ##PROGRESS##{json} 行上报阶段进度
+PROGRESS_PREFIX = "##PROGRESS##"
+LOG_TAIL_CHARS = 4000
 
 app = FastAPI(title="简历匹配系统 - 批处理调度器")
 scheduler = BackgroundScheduler()
@@ -36,37 +41,96 @@ def try_acquire(trigger: str) -> bool:
         if state["running"]:
             return False
         state["running"] = True
-        state["current_run"] = {"trigger": trigger, "started_at": now_str()}
+        state["current_run"] = {
+            "trigger": trigger,
+            "started_at": now_str(),
+            "progress": None,
+            "log_tail": "",
+        }
         return True
 
 
+def record_output_line(line: str, log_lines: list):
+    """处理子进程 stdout：##PROGRESS## 行更新阶段进度，其余行进入实时日志尾部"""
+    stripped = line.strip()
+    if stripped.startswith(PROGRESS_PREFIX):
+        try:
+            event = json.loads(stripped[len(PROGRESS_PREFIX):])
+        except json.JSONDecodeError:
+            return
+        event["at"] = now_str()
+        with state_lock:
+            run = state["current_run"]
+            if run is None:
+                return
+            progress = run["progress"] or {"total": 0, "events": []}
+            progress["total"] = event.get("total", progress["total"])
+            progress["current"] = event.get("index", 0)
+            progress["stage"] = event.get("stage", "")
+            progress["message"] = event.get("message", "")
+            progress["events"].append(event)
+            run["progress"] = progress
+        return
+    log_lines.append(line)
+    with state_lock:
+        run = state["current_run"]
+        if run is not None:
+            run["log_tail"] = "".join(log_lines)[-LOG_TAIL_CHARS:]
+
+
 def execute_batch_job(trigger: str):
-    """运行 spark-submit 并记录结果，调用前必须先 try_acquire 成功"""
+    """运行 spark-submit 并实时解析进度，调用前必须先 try_acquire 成功"""
     started = datetime.now()
     result_name = "success"
     error = ""
-    log = ""
+    log_lines = []
+    stderr_chunks = []
+    timed_out = threading.Event()
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             ["spark-submit", "--master", "local[*]", "--driver-memory", "4g", "batch_job.py"],
             cwd=SCRIPT_DIR,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=JOB_TIMEOUT_SECONDS,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
-        log = proc.stdout or ""
-        if proc.returncode == EXIT_CODE_SKIPPED:
-            result_name = "skipped"
-        elif proc.returncode != 0:
+
+        def drain_stderr():
+            for err_line in proc.stderr:
+                stderr_chunks.append(err_line)
+
+        stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+        stderr_thread.start()
+
+        def kill_on_timeout():
+            timed_out.set()
+            proc.kill()
+
+        watchdog = threading.Timer(JOB_TIMEOUT_SECONDS, kill_on_timeout)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            for line in proc.stdout:
+                record_output_line(line, log_lines)
+            returncode = proc.wait()
+        finally:
+            watchdog.cancel()
+        stderr_thread.join(timeout=5)
+
+        if timed_out.is_set():
             result_name = "failed"
-            error = (proc.stderr or "")[-2000:]
-    except subprocess.TimeoutExpired:
-        result_name = "failed"
-        error = f"任务超时（{JOB_TIMEOUT_SECONDS} 秒）"
+            error = f"任务超时（{JOB_TIMEOUT_SECONDS} 秒）"
+        elif returncode == EXIT_CODE_SKIPPED:
+            result_name = "skipped"
+        elif returncode != 0:
+            result_name = "failed"
+            error = "".join(stderr_chunks)[-2000:]
     except Exception as e:
         result_name = "failed"
         error = str(e)
     finished = datetime.now()
+    log = "".join(log_lines)
     with state_lock:
         state["running"] = False
         state["current_run"] = None
@@ -107,7 +171,7 @@ def get_status():
     with state_lock:
         snapshot = {
             "running": state["running"],
-            "current_run": state["current_run"],
+            "current_run": copy.deepcopy(state["current_run"]),
             "last_run": state["last_run"],
             "last_run_log": state["last_run_log"],
             "schedule_paused": state["schedule_paused"],
@@ -118,6 +182,16 @@ def get_status():
         next_run.strftime("%Y-%m-%d %H:%M:%S") if next_run else None
     )
     return snapshot
+
+
+@app.get("/progress")
+def get_progress():
+    """轻量实时进度查询，任务运行期间供前端高频轮询"""
+    with state_lock:
+        return {
+            "running": state["running"],
+            "current_run": copy.deepcopy(state["current_run"]),
+        }
 
 
 @app.post("/schedule/pause")

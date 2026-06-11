@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from datetime import datetime
@@ -39,6 +40,17 @@ RULE_WEIGHTS = {
 TOTAL_WEIGHTS = {"semantic": 0.60, "rule": 0.40}
 # 数据不足跳过时的退出码，调度器据此区分「跳过」和「成功/失败」
 EXIT_CODE_SKIPPED = 3
+TOTAL_STAGES = 6
+
+
+def report_progress(index, stage, message=""):
+    """向 stdout 输出阶段进度，调度器解析 ##PROGRESS## 行实时更新状态"""
+    print(f"[{index}/{TOTAL_STAGES}] {message}")
+    payload = json.dumps(
+        {"index": index, "total": TOTAL_STAGES, "stage": stage, "message": message},
+        ensure_ascii=False,
+    )
+    print(f"##PROGRESS##{payload}", flush=True)
 
 
 class InsufficientTrainingData(Exception):
@@ -284,6 +296,7 @@ def fit_feature_models(train_df):
         inputCol="raw_features",
         outputCol="tfidf_features",
     ).fit(train_with_cv)
+    report_progress(3, "train_word2vec", "训练 Word2Vec 模型（100 维 × 30 轮迭代）...")
     w2v_model = Word2Vec(
         inputCol="tokens",
         outputCol="w2v_vector",
@@ -313,7 +326,7 @@ def create_spark_session():
 
 def run_batch_job(spark):
     print(f"[{datetime.now()}] 开始批处理任务...")
-    print("[1/6] 读取和预处理数据...")
+    report_progress(1, "load_data", "从 HDFS 读取和预处理数据...")
     resumes_df = spark.read.csv(
         f"{HDFS_BASE}/processed/resumes",
         header=True,
@@ -328,17 +341,16 @@ def run_batch_job(spark):
 
     resume_count = resumes_df.count()
     job_count = jobs_df.count()
-    print(f"  简历数: {resume_count}, 岗位数: {job_count}")
+    report_progress(1, "load_data", f"简历 {resume_count} 份 · 岗位 {job_count} 个")
     if resume_count == 0 or job_count == 0:
         raise InsufficientTrainingData("简历或岗位数据为空")
 
-    print("[2/6] 训练 TF-IDF 模型...")
+    report_progress(2, "train_tfidf", "训练 TF-IDF 模型（CountVectorizer + IDF）...")
     train_df = resumes_df.select("tokens").union(jobs_df.select("tokens"))
     train_df = train_df.filter(size(col("tokens")) > 0)
     cv_model, idf_model, w2v_model = fit_feature_models(train_df)
 
-    print("[3/6] TF-IDF 和 Word2Vec 模型训练完成")
-    print("[4/6] 生成 TF-IDF 和 Word2Vec 向量...")
+    report_progress(4, "vectorize", "生成 TF-IDF 与 Word2Vec 语义向量...")
     resumes_with_vectors = w2v_model.transform(
         idf_model.transform(cv_model.transform(resumes_df))
     )
@@ -355,7 +367,11 @@ def run_batch_job(spark):
         [col(name).alias(f"job_{name}") for name in job_cols]
     )
 
-    print("[5/6] 计算匹配分数（笛卡尔积）...")
+    report_progress(
+        5,
+        "match",
+        f"构建匹配管道（{resume_count} × {job_count} = {resume_count * job_count} 条候选）...",
+    )
     matches = resumes_renamed.crossJoin(jobs_renamed)
     matches = matches.withColumn(
         "tfidf_score",
@@ -388,9 +404,8 @@ def run_batch_job(spark):
         col("job_department").alias("department"),
         *[col(f"scores.{field.name}") for field in score_schema.fields],
     )
-    print(f"  将生成 {resume_count * job_count} 条匹配记录")
 
-    print("[6/6] 写入匹配结果和保存模型...")
+    report_progress(6, "save", "执行计算并写入匹配结果、保存模型...")
     result_df.coalesce(1).write.mode("overwrite").csv(
         f"{HDFS_BASE}/output/matches",
         header=True,

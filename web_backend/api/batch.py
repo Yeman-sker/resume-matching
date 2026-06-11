@@ -37,6 +37,20 @@ async def get_batch_status():
         )
 
 
+@router.get("/progress")
+async def get_batch_progress():
+    """查询批处理任务实时进度（运行期间前端高频轮询）"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{BATCH_SERVICE_URL}/progress")
+            response.raise_for_status()
+            return response.json()
+    except (httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+        raise HTTPException(
+            status_code=503, detail=f"Batch service unavailable: {str(e)}"
+        )
+
+
 @router.post("/schedule/pause")
 async def pause_batch_schedule():
     """暂停定时自动触发"""

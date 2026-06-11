@@ -210,7 +210,7 @@ hdfs://localhost:9000/resume_matching/
 
 ### 中游：批处理任务
 - **重量级模型训练和匹配计算**：通过 APScheduler 每 10 分钟自动触发（服务启动时不立即运行）
-- **手动控制**（FastAPI，端口 8001）：`POST /trigger` 手动触发（运行中返回 409 互斥）、`GET /status` 状态查询（含上次运行结果/日志/下次自动运行时间）、`POST /schedule/pause|resume` 暂停/恢复自动调度；web_backend 以 `/api/batch/*` 代理，前端「批处理控制」页操作
+- **手动控制**（FastAPI，端口 8001）：`POST /trigger` 手动触发（运行中返回 409 互斥）、`GET /status` 状态查询（含上次运行结果/日志/下次自动运行时间）、`GET /progress` 实时进度（运行中的阶段事件 + 实时日志尾部，由 batch_job.py 向 stdout 输出 `##PROGRESS##{json}` 行上报）、`POST /schedule/pause|resume` 暂停/恢复自动调度；web_backend 以 `/api/batch/*` 代理，前端「批处理控制」页操作
 - **跳过语义**：数据不足时 `batch_job.py` 以退出码 3 退出，状态显示为「跳过」（区别于成功/失败）
 - **执行流程**：
   1. 读取 HDFS 清洗后的简历和岗位数据

@@ -13,6 +13,7 @@ import type {
   GeneratorStatus,
   GeneratorConfig,
   BatchStatus,
+  BatchProgressSnapshot,
 } from '@/types'
 
 function getErrorMessage(err: unknown): string {
@@ -42,6 +43,7 @@ interface AppStore {
   startGenerator: (config?: GeneratorConfig) => Promise<void>
   stopGenerator: () => Promise<void>
   fetchBatchStatus: () => Promise<BatchStatus>
+  fetchBatchProgress: () => Promise<BatchProgressSnapshot>
   triggerBatch: () => Promise<void>
   pauseBatchSchedule: () => Promise<void>
   resumeBatchSchedule: () => Promise<void>
@@ -147,6 +149,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   fetchBatchStatus: async () => {
     const res = await api.get<BatchStatus>('/api/batch/status')
+    return res.data
+  },
+
+  fetchBatchProgress: async () => {
+    const res = await api.get<BatchProgressSnapshot>('/api/batch/progress')
     return res.data
   },
 

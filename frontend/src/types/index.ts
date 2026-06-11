@@ -174,9 +174,37 @@ export interface BatchRunRecord {
   error: string
 }
 
+export interface BatchProgressEvent {
+  index: number
+  total: number
+  stage: string
+  message: string
+  at: string
+}
+
+export interface BatchProgress {
+  total: number
+  current: number
+  stage: string
+  message: string
+  events: BatchProgressEvent[]
+}
+
+export interface BatchCurrentRun {
+  trigger: 'manual' | 'scheduled'
+  started_at: string
+  progress?: BatchProgress | null
+  log_tail?: string
+}
+
+export interface BatchProgressSnapshot {
+  running: boolean
+  current_run: BatchCurrentRun | null
+}
+
 export interface BatchStatus {
   running: boolean
-  current_run: { trigger: 'manual' | 'scheduled'; started_at: string } | null
+  current_run: BatchCurrentRun | null
   last_run: BatchRunRecord | null
   last_run_log: string
   schedule_paused: boolean
