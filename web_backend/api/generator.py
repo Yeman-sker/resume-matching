@@ -51,7 +51,8 @@ async def start_generator(config: GeneratorConfig | None = None):
 async def stop_generator():
     """停止数据生成器"""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        # stop 内部会等生成循环退出并执行一次 HDFS flush，5 秒不够
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 "http://localhost:8000/control", json={"action": "stop"}
             )

@@ -41,6 +41,11 @@ Only offer to create an ADR when all three are true:
 
 ## 开发命令
 
+> **运行环境：以下所有命令必须在 Parallels 虚拟机里执行，不要在本机运行。**
+> 本机项目目录与虚拟机 `/media/psf/resume-matching` 是 Parallels 共享目录（实时双向同步，无需上传）。
+> SSH 连接：`ssh parallels@10.211.55.4`（免密）。运行裸 `hdfs`/`spark-submit` 等命令需用 login shell，例如 `ssh parallels@10.211.55.4 "bash -lc 'cd /media/psf/resume-matching && <命令>'"`，否则不在 PATH。
+> 快捷方式：斜杠命令 `/vm-run <命令>` 会自动按上述规则在虚拟机里执行。
+
 ### 环境初始化
 ```bash
 # 统一 Python 环境（所有模块共享）

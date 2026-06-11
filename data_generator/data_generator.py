@@ -3,6 +3,7 @@ import csv
 import json
 import logging
 import os
+import random
 import re
 import subprocess
 import tempfile
@@ -76,6 +77,25 @@ SKILL_POOL = (
     "Data Visualization, ETL, Docker"
 )
 
+CITY_POOL = [
+    "北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京", "西安", "重庆",
+    "苏州", "天津", "长沙", "郑州", "青岛", "合肥", "南昌", "福州", "厦门", "济南",
+    "大连", "宁波", "东莞", "昆明", "沈阳", "贵阳", "南宁", "石家庄", "哈尔滨", "太原",
+]
+
+SURNAME_POOL = [
+    "王", "李", "张", "刘", "陈", "杨", "黄", "赵", "吴", "周",
+    "徐", "孙", "马", "朱", "胡", "林", "郭", "何", "高", "罗",
+    "郑", "梁", "谢", "宋", "唐", "许", "韩", "冯", "邓", "曹",
+    "彭", "曾", "肖", "田", "董", "袁", "潘", "蒋", "蔡", "叶",
+]
+
+JOB_DIRECTIONS = [
+    "数据分析", "大数据开发", "Python 开发", "Java 后端", "数据可视化", "机器学习",
+]
+
+EDUCATION_POOL = ["大专", "本科", "硕士", "博士"]
+
 RESUME_PROMPT = f"""生成一条用于教学项目“简历-岗位匹配系统”的中文简历脏数据。
 
 只生成一个 JSON 对象，禁止返回数组、Markdown 代码块或解释文字。
@@ -84,7 +104,7 @@ JSON 必须严格包含且只包含以下字段：
 
 字段要求：
 - resume_id：例如 RES_001；允许 3%-5% 概率与常见编号重复，5%-10% 概率为空。
-- name：中文姓名，例如“张三同学”。
+- name：中文姓名，可少量带“同学”“先生”等多余后缀作为噪声。
 - gender：男或女，允许少量为空。
 - age：年龄；允许少量异常值，如 -3、88。
 - education：大专、本科、硕士、博士；允许“本科学历”“本科及以上”等不统一写法。
@@ -95,7 +115,7 @@ JSON 必须严格包含且只包含以下字段：
 - certifications：证书列表，使用英文逗号分隔，可为空。
 - work_history：工作或项目经历；允许少量 HTML、多余空格、感叹号等噪声。
 - expected_salary：期望年薪，单位为万/年；允许异常值 0、999。
-- location：期望城市；允许“南昌”“南昌市”“江西南昌”等不统一写法。
+- location：期望城市；同一城市可用“城市名”“城市名+市”“省名+城市名”等不统一写法。
 - contact：联系方式。
 
 岗位方向覆盖数据分析、大数据开发、Python 开发、Java 后端、数据可视化、机器学习。
@@ -114,7 +134,7 @@ JSON 必须严格包含且只包含以下字段：
 - job_id：例如 JOB_001；允许 3%-5% 概率与常见编号重复，5%-10% 概率为空。
 - job_title：岗位名称。
 - department：所属部门。
-- location：工作城市；允许“南昌”“南昌市”“江西南昌”等不统一写法。
+- location：工作城市；同一城市可用“城市名”“城市名+市”“省名+城市名”等不统一写法。
 - education_required：最低学历；允许“本科”“本科及以上”“硕士”等写法或为空。
 - experience_required：最低经验；允许 0、1、“1-3年”“三年以上”等写法。
 - skills_required：必备技能，使用英文逗号分隔。
@@ -131,6 +151,9 @@ JSON 必须严格包含且只包含以下字段：
 所有字段必须存在；缺失数据使用空字符串或 null 表示。"""
 
 is_generating = False
+loop_seq = 0
+generation_task: asyncio.Task | None = None
+inflight_tasks: set = set()
 resume_buffer: List[Dict] = []
 job_buffer: List[Dict] = []
 stats = {"resumes": 0, "jobs": 0, "last_flush": None, "started_at": None}
@@ -266,12 +289,14 @@ async def call_openai(prompt: str, data_type: str) -> str:
     raise RuntimeError("模型请求重试耗尽")
 
 
-async def generate_record(prompt: str, data_type: str, fields: List[str]) -> Dict:
+async def generate_record(prompt: str, data_type: str, fields: List[str], hint: str = "") -> Dict:
     nonce = uuid.uuid4().hex[:8].upper()
     prompt_with_nonce = (
         f"{prompt}\n本次生成随机标识为 {nonce}。"
         f"除少量故意重复或缺失样本外，{fields[0]} 应结合该标识生成不同编号。"
     )
+    if hint:
+        prompt_with_nonce = f"{prompt_with_nonce}\n{hint}"
     content = await call_openai(prompt_with_nonce, data_type)
     try:
         record = parse_json_object(content, fields)
@@ -288,18 +313,53 @@ async def generate_record(prompt: str, data_type: str, fields: List[str]) -> Dic
     return record
 
 
+def build_resume_hint() -> str:
+    return (
+        "本次简历请尽量贴合以下设定生成（仍保留上面要求的少量缺失/异常/不统一写法）："
+        f"姓氏倾向「{random.choice(SURNAME_POOL)}」，"
+        f"期望城市「{random.choice(CITY_POOL)}」，"
+        f"岗位方向「{random.choice(JOB_DIRECTIONS)}」，"
+        f"年龄约 {random.randint(22, 45)} 岁，"
+        f"学历「{random.choice(EDUCATION_POOL)}」，"
+        f"工作年限约 {random.randint(0, 12)} 年，"
+        f"期望年薪约 {random.randint(8, 50)} 万。"
+    )
+
+
+def build_job_hint() -> str:
+    salary_low = random.randint(8, 30)
+    salary_high = salary_low + random.randint(4, 25)
+    return (
+        "本次岗位请尽量贴合以下设定生成（仍保留上面要求的少量缺失/异常/不统一写法）："
+        f"工作城市「{random.choice(CITY_POOL)}」，"
+        f"岗位方向「{random.choice(JOB_DIRECTIONS)}」，"
+        f"最低学历「{random.choice(EDUCATION_POOL)}」，"
+        f"最低经验约 {random.randint(0, 8)} 年，"
+        f"年薪范围约 {salary_low}-{salary_high} 万/年。"
+    )
+
+
 async def generate_resume() -> Dict:
-    return await generate_record(RESUME_PROMPT, "resume", RESUME_FIELDS)
+    return await generate_record(RESUME_PROMPT, "resume", RESUME_FIELDS, build_resume_hint())
 
 
 async def generate_job() -> Dict:
-    return await generate_record(JOB_PROMPT, "job", JOB_FIELDS)
+    return await generate_record(JOB_PROMPT, "job", JOB_FIELDS, build_job_hint())
 
 
 def write_to_hdfs(data: List[Dict], path: str, fieldnames: List[str]) -> None:
     """以标准 CSV 写入临时文件并推送到 HDFS。"""
     if not data:
         return
+
+    # 下游 Spark Streaming 按物理行读取 CSV（未开 multiLine），字段内换行会撕裂记录
+    rows = [
+        {
+            key: re.sub(r"[\r\n]+", " ", value) if isinstance(value, str) else value
+            for key, value in row.items()
+        }
+        for row in data
+    ]
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{timestamp}_{uuid.uuid4().hex[:8]}.csv"
@@ -315,7 +375,7 @@ def write_to_hdfs(data: List[Dict], path: str, fieldnames: List[str]) -> None:
         local_file = file.name
         writer = csv.DictWriter(file, fieldnames=fieldnames, extrasaction="raise")
         writer.writeheader()
-        writer.writerows(data)
+        writer.writerows(rows)
 
     logger.info("HDFS 推送开始 | records=%s | target=%s", len(data), target)
     try:
@@ -350,43 +410,57 @@ async def flush_buffers() -> None:
     stats["last_flush"] = datetime.now().isoformat()
 
 
-async def generation_loop() -> None:
-    global is_generating
+def _spawn_generation(data_type: str, seq: int) -> None:
+    task = asyncio.create_task(_generate_into_buffer(data_type, seq))
+    inflight_tasks.add(task)
+    task.add_done_callback(inflight_tasks.discard)
+
+
+async def _generate_into_buffer(data_type: str, seq: int) -> None:
+    try:
+        record = await (generate_resume() if data_type == "resume" else generate_job())
+    except Exception as exc:
+        logger.error(
+            "数据生成失败 | type=%s | error_type=%s | error=%r",
+            data_type,
+            type(exc).__name__,
+            exc,
+        )
+        return
+
+    if seq != loop_seq:
+        logger.info("生成器已停止，丢弃在途数据 | type=%s", data_type)
+        return
+
+    if data_type == "resume":
+        resume_buffer.append(record)
+        recent_resumes.insert(0, record)
+        del recent_resumes[5:]
+    else:
+        job_buffer.append(record)
+        recent_jobs.insert(0, record)
+        del recent_jobs[5:]
+
+
+async def generation_loop(seq: int) -> None:
     last_flush = time.time()
     last_resume = 0.0
     last_job = 0.0
 
-    while is_generating:
+    while seq == loop_seq:
         try:
             now = time.time()
-            tasks = []
+            spawned = []
             if now - last_resume >= RESUME_INTERVAL:
-                tasks.append(("resume", generate_resume()))
+                _spawn_generation("resume", seq)
+                spawned.append("resume")
                 last_resume = now
             if now - last_job >= JOB_INTERVAL:
-                tasks.append(("job", generate_job()))
+                _spawn_generation("job", seq)
+                spawned.append("job")
                 last_job = now
-
-            if tasks:
-                logger.info("数据生成批次开始 | tasks=%s", [name for name, _ in tasks])
-                results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
-                for (data_type, _), result in zip(tasks, results):
-                    if isinstance(result, Exception):
-                        logger.error(
-                            "数据生成失败 | type=%s | error_type=%s | error=%r",
-                            data_type,
-                            type(result).__name__,
-                            result,
-                        )
-                        continue
-                    if data_type == "resume":
-                        resume_buffer.append(result)
-                        recent_resumes.insert(0, result)
-                        del recent_resumes[5:]
-                    else:
-                        job_buffer.append(result)
-                        recent_jobs.insert(0, result)
-                        del recent_jobs[5:]
+            if spawned:
+                logger.info("数据生成批次开始 | tasks=%s", spawned)
 
             if time.time() - last_flush >= FLUSH_INTERVAL:
                 await flush_buffers()
@@ -404,7 +478,8 @@ async def generation_loop() -> None:
 
 @app.post("/control")
 async def control_generator(ctrl: GeneratorControl):
-    global is_generating, RESUME_INTERVAL, JOB_INTERVAL, FLUSH_INTERVAL
+    global is_generating, loop_seq, generation_task
+    global RESUME_INTERVAL, JOB_INTERVAL, FLUSH_INTERVAL
 
     if ctrl.action == "start":
         if is_generating:
@@ -415,15 +490,22 @@ async def control_generator(ctrl: GeneratorControl):
             JOB_INTERVAL = max(1.0, ctrl.job_interval_seconds)
         if ctrl.flush_interval_seconds is not None:
             FLUSH_INTERVAL = max(1.0, ctrl.flush_interval_seconds)
+        loop_seq += 1
         is_generating = True
         stats["started_at"] = time.time()
-        asyncio.create_task(generation_loop())
+        generation_task = asyncio.create_task(generation_loop(loop_seq))
         return {"status": "started", "config": get_config()}
 
     if ctrl.action == "stop":
         if not is_generating:
             raise HTTPException(400, "生成器未运行")
         is_generating = False
+        loop_seq += 1
+        for task in list(inflight_tasks):
+            task.cancel()
+        if generation_task is not None:
+            await generation_task
+            generation_task = None
         await flush_buffers()
         return {"status": "stopped", "stats": stats}
 
